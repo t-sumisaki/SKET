@@ -9,6 +9,8 @@ jobs:
   package:
     name: create blender addon package
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v3.5.3
