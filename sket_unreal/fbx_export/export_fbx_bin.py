@@ -2720,8 +2720,7 @@ def fbx_header_elements(root, scene_data, time=None):
     import addon_utils
     import sys
 
-    # ##### override addon version (for x4ue)
-    addon_ver = addon_utils.module_bl_info(sys.modules['x4ue'])['version']
+    addon_ver = addon_utils.module_bl_info(sys.modules['sket_unreal'])['version']
     origin_addon_var = (4, 36, 0) # from OFFICIAL FBX Exporter blender3.2
 
     # ##### Start of FBXHeaderExtension element.

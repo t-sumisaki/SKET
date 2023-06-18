@@ -217,18 +217,18 @@ class SKET_OT_export_fbx(bpy.types.Operator):
                 filepath=self.filepath,
                 use_selection=True,
                 # TODO DEBUG
-                global_scale=context.scene.x4ue_global_scale,
+                global_scale=context.scene.sket_global_scale,
                 use_mesh_modifiers=True,
-                use_armature_deform_only=context.scene.x4ue_use_armature_deform_only,
+                use_armature_deform_only=context.scene.sket_use_armature_deform_only,
                 add_leaf_bones=False,
                 apply_unit_scale=True,
                 # TODO debug
-                # humanoid_actions=context.scene.x4ue_export_h_actions,
+                # humanoid_actions=context.scene.sket_export_h_actions,
                 # TODO debug
-                # bake_anim_simplify_factor=context.scene.x4ue_simplify_fac,
-                mesh_smooth_type=context.scene.x4ue_mesh_smooth_type,
-                primary_bone_axis=context.scene.x4ue_bone_axis_primary_export,
-                secondary_bone_axis=context.scene.x4ue_bone_axis_secondary_export,
+                # bake_anim_simplify_factor=context.scene.sket_simplify_fac,
+                mesh_smooth_type=context.scene.sket_mesh_smooth_type,
+                primary_bone_axis=context.scene.sket_bone_axis_primary_export,
+                secondary_bone_axis=context.scene.sket_bone_axis_secondary_export,
                 # TODO debug
                 # shape_keys_baked_data=str(self.shape_keys_data)
             )
