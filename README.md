@@ -1,15 +1,24 @@
 # SKET: SkeletalMesh Exporter for Unreal Engine
 
-
 ## About
-- UnrealEngine用のSkeletalMeshを出力するためのBlender Addon
-- UnrealEngine向けに出力する際に必要な、ArmatureのScale修正やAnimationのScale修正を自動的に行う
 
+- UnrealEngine 用の SkeletalMesh を出力するための Blender アドオン
+- UnrealEngine 向けに出力する際に必要な、Armature の Scale 修正や Animation の Scale 修正を出力時に自動的に行う
 
 ## Support Versions
-- Blender 3.2以降
+
+- Blender 3.2 以降
+
+## インストール方法
+
+### ソースから
+
+- リポジトリをダウンロードする
+- `sket_unreal` フォルダを zip 圧縮する
+- Blender のアドオン設定で、作成した zip ファイルをアドオンとしてインストールする
 
 ## 機能
-- [x] FBX出力
+
+- [x] FBX 出力
 - [ ] Action(AnimSequence)の選択出力
-- [ ] ActionごとのFBX出力
+- [ ] Action ごとの FBX 出力
