@@ -11,6 +11,11 @@
 
 ## インストール方法
 
+### リリースから
+
+- [Releases](https://github.com/t-sumisaki/SKET/Releases) から `sket_unreal_vx.x.x.zip` を取得する
+- Blender のアドオン設定で、取得した zip ファイルをアドオンとしてインストールする
+
 ### ソースから
 
 - リポジトリをダウンロードする
