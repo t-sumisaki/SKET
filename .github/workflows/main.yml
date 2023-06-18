@@ -19,4 +19,4 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          files: sket_unreal_${RELEASE_VERSION}.zip
+          files: sket_unreal_*.zip
