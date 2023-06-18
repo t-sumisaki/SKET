@@ -1,0 +1,23 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+\\.[0-9]+\\.[0-9]'
+
+jobs:
+  package:
+    name: create blender addon package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3.5.3
+      - name: Get tag
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - name: Zip up package
+        run: zip -r sket_unreal_${RELEASE_VERSION}.zip sket_unreal
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: sket_unreal_${RELEASE_VERSION}.zip
+      
