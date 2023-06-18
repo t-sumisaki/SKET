@@ -403,7 +403,6 @@ def unregister():
     for cls in classes:
         bpy.utils.unregister_class(cls)
 
-    del bpy.types.Scene.sket_export_directory
     del bpy.types.Scene.sket_use_armature_deform_only
     del bpy.types.Scene.sket_global_scale
     del bpy.types.Scene.sket_mesh_smooth_type
