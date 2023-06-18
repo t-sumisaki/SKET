@@ -20,5 +20,6 @@
 ## 機能
 
 - [x] FBX 出力
+- [ ] SkeletalMesh Validation
 - [ ] Action(AnimSequence)の選択出力
 - [ ] Action ごとの FBX 出力
