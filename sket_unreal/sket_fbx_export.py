@@ -182,7 +182,7 @@ class SKET_OT_export_fbx(bpy.types.Operator):
 
         no_armature_mode = False
 
-        mode_skeleton_only = context.scene.sket_mode_export_skeleton_only
+        mode_skeleton_only = context.scene.sket_mode_export_animation_only
 
         try:
             # Initial checks
@@ -556,4 +556,5 @@ def unregister():
     del bpy.types.Scene.sket_bone_axis_primary_export
     del bpy.types.Scene.sket_bone_axis_secondary_export
     del bpy.types.Scene.sket_mode_export_animations
+    del bpy.types.Scene.sket_mode_export_animation_only
     del bpy.types.Scene.sket_mode_export_separate_each_anims
