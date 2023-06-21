@@ -2173,7 +2173,30 @@ def fbx_animations(scene_data):
             org_act = ob.animation_data.action
             path_resolve = ob.path_resolve
 
+            export_mode = bpy.context.scene.sket_mode_export_animations
+
             for act in bpy.data.actions:
+
+                # HACK: === Export Action filter
+
+                from ..sket_common import (
+                    SKET_E_MODE_EXPORT_ANIM_ALL,
+                    SKET_E_MODE_EXPORT_ANIM_SELECT,
+
+                    SKET_TAG_EXPORT
+                )
+                
+                export_action = False
+
+                if SKET_TAG_EXPORT in act.keys():
+                    if act[SKET_TAG_EXPORT] == True:
+                        export_action = True
+                
+                if not export_action:
+                    continue
+
+                # HACK: === END Export Action Filter
+
                 # For now, *all* paths in the action must be valid for the object, to validate the action.
                 # Unless that action was already assigned to the object!
                 if act != org_act and not validate_actions(act, path_resolve):
@@ -2745,7 +2768,7 @@ def fbx_header_elements(root, scene_data, time=None):
     elem_data_single_int32(elem, b"Second", time.second)
     elem_data_single_int32(elem, b"Millisecond", time.microsecond // 1000)
 
-    elem_data_single_string_unicode(header_ext, b"Creator", "%s - %s - %d.%d.%d (origin: %d.%d.%d)"
+    elem_data_single_string_unicode(header_ext, b"Creator", "%s - %s - SKET: %d.%d.%d (FBX origin: %d.%d.%d)"
                                                 % (app_name, app_ver, addon_ver[0], addon_ver[1], addon_ver[2], origin_addon_var[0], origin_addon_var[1], origin_addon_var[2]))
 
     # 'SceneInfo' seems mandatory to get a valid FBX file...
