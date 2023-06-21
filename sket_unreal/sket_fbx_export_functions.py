@@ -8,6 +8,7 @@ from .sket_common import (
     SKET_EXPORT_OBJ_SUFFIX,
     SKET_EXPORT_WORK_OBJ_SUFFIX,
     SKET_EXPORT_DUMMYMESH_NAME,
+    SKET_NAME_ARMATURE,
     # Functions
     is_object_hidden,
     set_active_object,
@@ -19,14 +20,14 @@ from .sket_common import (
 )
 
 
-def create_copy_objects(armature_name: str, no_armature_mode=False) -> List[str]:
+def create_copy_objects(armature_name: str, no_armature_mode=False, force_dummy_mesh=False) -> List[str]:
     copy_armature_name = armature_name + SKET_EXPORT_OBJ_SUFFIX
 
     list_stored_actions = [action.name for action in bpy.data.actions]
     if no_armature_mode:
         list_char_objects = [obj.name for obj in bpy.context.selected_objects]
     else:
-        list_char_objects = get_skeletalmesh_objects(armature_name)
+        list_char_objects = get_skeletalmesh_objects(armature_name, force_dummy_mesh)
 
     list_copy_objects: List[str] = []
 
@@ -129,7 +130,12 @@ def rename_objects_for_export(list_target_objects):
         origin_obj_name = obj_name.replace(SKET_EXPORT_OBJ_SUFFIX, "")
         if bpy.data.objects.get(origin_obj_name):
             bpy.data.objects[origin_obj_name].name = origin_obj_name + SKET_EXPORT_WORK_OBJ_SUFFIX
-            bpy.data.objects[obj_name].name = origin_obj_name
+
+            # HACK: Armature名はUnrealEngine側で決まっているので、Armature名は固定値とする
+            if is_armature(bpy.data.objects[obj_name]):
+                bpy.data.objects[obj_name].name = SKET_NAME_ARMATURE
+            else:
+                bpy.data.objects[obj_name].name = origin_obj_name
 
 
 def revert_object_name(list_target_objects):
@@ -145,26 +151,27 @@ def revert_object_name(list_target_objects):
             bpy.data.objects[base_obj_name].name = origin_obj_name
 
 
-def get_skeletalmesh_objects(armature_name: str) -> List[str]:
+def get_skeletalmesh_objects(armature_name: str, force_dummy_mesh=False) -> List[str]:
     """SkeletalMesh用のオブジェクト名を取得する"""
     skl_objects = []
 
     #
     skl_objects.append(armature_name)
 
-    for obj in bpy.data.objects:
-        # Meshであり、非表示でないもの
-        print("obj name:", obj.name, is_mesh(obj), is_object_hidden(obj))
-        if is_mesh(obj) and not is_object_hidden(obj):
-            print("check mods: ", len(obj.modifiers))
-            for mod in obj.modifiers:
-                print("mod:", mod.name, mod.type)
-                if is_armature(mod) and mod.show_viewport:
-                    if mod.object is not None:
-                        if mod.object.name == armature_name:
-                            print("found obj:", obj.name)
-                            skl_objects.append(obj.name)
-                            break
+    if not force_dummy_mesh:
+        for obj in bpy.data.objects:
+            # Meshであり、非表示でないもの
+            print("obj name:", obj.name, is_mesh(obj), is_object_hidden(obj))
+            if is_mesh(obj) and not is_object_hidden(obj):
+                print("check mods: ", len(obj.modifiers))
+                for mod in obj.modifiers:
+                    print("mod:", mod.name, mod.type)
+                    if is_armature(mod) and mod.show_viewport:
+                        if mod.object is not None:
+                            if mod.object.name == armature_name:
+                                print("found obj:", obj.name)
+                                skl_objects.append(obj.name)
+                                break
 
     if len(skl_objects) == 1:
         dummy_obj = _create_dummy_mesh()

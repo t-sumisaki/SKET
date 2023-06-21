@@ -1,4 +1,4 @@
-import typing
+from typing import List
 import bpy
 from bpy.types import Context
 from bpy_extras.io_utils import ExportHelper
@@ -8,7 +8,8 @@ from .sket_common import (
     SKET_E_MODE_EXPORT_ANIM_ALL,
     SKET_E_MODE_EXPORT_ANIM_SELECT,
     SKET_E_MODE_EXPORT_ANIM_NONE,
-    SKET_PROP_EXPORT_ANIM,
+    SKET_TAG_EXPORT,
+    SKET_TAG_ACTION_EXCLUDE,
     # functions
     is_armature,
     is_mesh,
@@ -27,6 +28,24 @@ from .sket_fbx_export_functions import (
     revert_object_name,
     revert_action_scale_x100,
 )
+
+import pathlib
+
+
+def get_export_actions(context) -> List[str]:
+    export_actions = []
+
+    if context.scene.sket_mode_export_animations == SKET_E_MODE_EXPORT_ANIM_NONE:
+        return export_actions
+
+    for act in bpy.data.actions:
+        if context.scene.sket_mode_export_animations == SKET_E_MODE_EXPORT_ANIM_SELECT:
+            if SKET_TAG_ACTION_EXCLUDE in act.keys() and act[SKET_TAG_ACTION_EXCLUDE] == True:
+                continue
+
+        export_actions.append(act.name)
+
+    return export_actions
 
 
 class SKET_PT_export_fbx_panel(bpy.types.Panel):
@@ -60,29 +79,35 @@ class SKET_OT_open_export_fbx_dialog(bpy.types.Operator, ExportHelper):
     def draw(self, context):
         layout = self.layout
 
-        self.draw_misc_section(context, layout)
+        self.draw_mode_section(context, layout)
 
-        # TODO fix
-        # self.draw_actions_section(context, layout)
+        self.draw_mesh_option_section(context, layout)
+        self.draw_animation_section(context, layout)
 
-    def draw_misc_section(self, context, parent):
+    def draw_mode_section(self, context, parent):
         box = parent.box()
-        box.label(text="Misc:")
+        box.label(text="Mode:")
+        box.column(align=True).prop(context.scene, "sket_mode_export_animation_only")
 
-        # global scale
-        box.column(align=True).prop(context.scene, "sket_global_scale")
-        # smooth type
-        box.column(align=True).prop(context.scene, "sket_mesh_smooth_type")
-        # deform armature only
-        box.column(align=True).prop(context.scene, "sket_use_armature_deform_only")
+    def draw_mesh_option_section(self, context, parent):
+        if not context.scene.sket_mode_export_animation_only:
+            box = parent.box()
+            box.label(text="Mesh:")
 
-        # axis
-        axis = box.column(align=True)
-        axis.label(text="Bone Axes:")
-        axis.prop(context.scene, "sket_bone_axis_primary_export")
-        axis.prop(context.scene, "sket_bone_axis_secondary_export")
+            # global scale
+            box.column(align=True).prop(context.scene, "sket_global_scale")
+            # smooth type
+            box.column(align=True).prop(context.scene, "sket_mesh_smooth_type")
+            # deform armature only
+            box.column(align=True).prop(context.scene, "sket_use_armature_deform_only")
 
-    def draw_actions_section(self, context, parent):
+            # axis
+            axis = box.column(align=True)
+            axis.label(text="Bone Axes:")
+            axis.prop(context.scene, "sket_bone_axis_primary_export")
+            axis.prop(context.scene, "sket_bone_axis_secondary_export")
+
+    def draw_animation_section(self, context, parent):
         box = parent.box()
         box.label(text="Animations:")
 
@@ -100,15 +125,23 @@ class SKET_OT_open_export_fbx_dialog(bpy.types.Operator, ExportHelper):
                     act_row = col.row(align=True)
                     act_row.label(text=act.name)
 
-                    if SKET_PROP_EXPORT_ANIM in act.keys() and act[SKET_PROP_EXPORT_ANIM]:
-                        op_select = act_row.operator(SKET_OT_unselect_action.bl_idname, text="", icon="CHECKBOX_HLT")
-                        op_select.action_name = act.name
-                    else:
-                        op_select = act_row.operator(SKET_OT_select_action.bl_idname, text="", icon="CHECKBOX_DEHLT")
-                        op_select.action_name = act.name
+                    checkbox = "CHECKBOX_HLT"
+
+                    if SKET_TAG_ACTION_EXCLUDE in act.keys() and act[SKET_TAG_ACTION_EXCLUDE] == True:
+                        checkbox = "CHECKBOX_DEHLT"
+
+                    _op = act_row.operator(SKET_OT_set_action_data_tag.bl_idname, text="", icon=checkbox)
+                    _op.action_name = act.name
+                    _op.tag = SKET_TAG_ACTION_EXCLUDE
+                    _op.mode = "TOGGLE"
+
             else:
                 # Actionが存在しない場合はラベルのみ
                 col.row(align=True).label(text="No actions to export")
+
+        if context.scene.sket_mode_export_animations in (SKET_E_MODE_EXPORT_ANIM_ALL, SKET_E_MODE_EXPORT_ANIM_SELECT):
+            col = box.column(align=True)
+            col.prop(context.scene, "sket_mode_export_separate_each_anims", text="Separate FBX each actions")
 
     def execute(self, context):
         return SKET_OT_export_fbx.execute(self, context)
@@ -148,6 +181,8 @@ class SKET_OT_export_fbx(bpy.types.Operator):
         list_target_actions = []
 
         no_armature_mode = False
+
+        mode_skeleton_only = context.scene.sket_mode_export_animation_only
 
         try:
             # Initial checks
@@ -199,7 +234,7 @@ class SKET_OT_export_fbx(bpy.types.Operator):
             context.scene.tool_settings.use_keyframe_insert_auto = False
 
             # Create copy objects
-            list_target_objects = create_copy_objects(target_armature_name, no_armature_mode)
+            list_target_objects = create_copy_objects(target_armature_name, no_armature_mode, mode_skeleton_only)
             list_target_actions = [a.name for a in bpy.data.actions]
 
             if no_armature_mode:
@@ -213,27 +248,88 @@ class SKET_OT_export_fbx(bpy.types.Operator):
             select_objects(list_target_objects)
             rename_objects_for_export(list_target_objects)
 
-            bpy.ops.sket_export_scene.fbx(
-                filepath=self.filepath,
-                use_selection=True,
-                # TODO DEBUG
-                global_scale=context.scene.sket_global_scale,
-                use_mesh_modifiers=True,
-                use_armature_deform_only=context.scene.sket_use_armature_deform_only,
-                add_leaf_bones=False,
-                apply_unit_scale=True,
-                # TODO debug
-                # humanoid_actions=context.scene.sket_export_h_actions,
-                # TODO debug
-                # bake_anim_simplify_factor=context.scene.sket_simplify_fac,
-                mesh_smooth_type=context.scene.sket_mesh_smooth_type,
-                primary_bone_axis=context.scene.sket_bone_axis_primary_export,
-                secondary_bone_axis=context.scene.sket_bone_axis_secondary_export,
-                # TODO debug
-                # shape_keys_baked_data=str(self.shape_keys_data)
-            )
+            object_types = {"EMPTY", "ARMATURE", "MESH"}
+
+            if mode_skeleton_only:
+                object_types = object_types - {"MESH"}
+
+            export_files = []
+
+            if context.scene.sket_mode_export_separate_each_anims:
+                basefilepath = pathlib.Path(self.filepath)
+
+                for export_act in get_export_actions(context):
+                    filepath = basefilepath.parent / f"{basefilepath.stem}_{export_act}{basefilepath.suffix}"
+
+                    print(f"Export file: {filepath}")
+
+                    # Actionに出力用のタグを設定する
+                    for act in bpy.data.actions:
+                        if act.name == export_act:
+                            act[SKET_TAG_EXPORT] = True
+                            print(f"Set Export Target:{act.name}")
+                        else:
+                            act[SKET_TAG_EXPORT] = False
+                            print(f"Set no export target:{act.name}")
+
+                    bpy.ops.sket_export_scene.fbx(
+                        filepath=str(filepath),
+                        use_selection=True,
+                        # TODO DEBUG
+                        global_scale=context.scene.sket_global_scale,
+                        use_mesh_modifiers=True,
+                        use_armature_deform_only=context.scene.sket_use_armature_deform_only,
+                        add_leaf_bones=False,
+                        apply_unit_scale=True,
+                        # TODO debug
+                        # humanoid_actions=context.scene.sket_export_h_actions,
+                        # TODO debug
+                        # bake_anim_simplify_factor=context.scene.sket_simplify_fac,
+                        mesh_smooth_type=context.scene.sket_mesh_smooth_type,
+                        primary_bone_axis=context.scene.sket_bone_axis_primary_export,
+                        secondary_bone_axis=context.scene.sket_bone_axis_secondary_export,
+                        # TODO debug
+                        # shape_keys_baked_data=str(self.shape_keys_data)
+                        object_types=object_types,
+                    )
+
+            else:
+                # Actionに出力用のタグを設定する
+
+                export_actions = get_export_actions(context)
+
+                for act in bpy.data.actions:
+                    if act.name in export_actions:
+                        act[SKET_TAG_EXPORT] = True
+                    else:
+                        act[SKET_TAG_EXPORT] = False
+
+                bpy.ops.sket_export_scene.fbx(
+                    filepath=self.filepath,
+                    use_selection=True,
+                    # TODO DEBUG
+                    global_scale=context.scene.sket_global_scale,
+                    use_mesh_modifiers=True,
+                    use_armature_deform_only=context.scene.sket_use_armature_deform_only,
+                    add_leaf_bones=False,
+                    apply_unit_scale=True,
+                    # TODO debug
+                    # humanoid_actions=context.scene.sket_export_h_actions,
+                    # TODO debug
+                    # bake_anim_simplify_factor=context.scene.sket_simplify_fac,
+                    mesh_smooth_type=context.scene.sket_mesh_smooth_type,
+                    primary_bone_axis=context.scene.sket_bone_axis_primary_export,
+                    secondary_bone_axis=context.scene.sket_bone_axis_secondary_export,
+                    # TODO debug
+                    # shape_keys_baked_data=str(self.shape_keys_data)
+                )
 
         finally:
+            # 出力用のタグは削除しておく
+            for act in bpy.data.actions:
+                if SKET_TAG_EXPORT in act.keys():
+                    del act[SKET_TAG_EXPORT]
+
             revert_object_name(list_target_objects)
             revert_action_scale_x100(list_target_actions)
 
@@ -259,11 +355,56 @@ class SKET_OT_export_fbx(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class SKET_OT_select_action(bpy.types.Operator):
-    bl_idname = "sket.select_action"
-    bl_label = "SKET select action"
+class SKET_OT_set_action_data_tag(bpy.types.Operator):
+    bl_idname = "sket.set_action_data_tag"
+    bl_label = "SKET set action data tag"
 
-    bl_description = "Select Action"
+    action_name: bpy.props.StringProperty(default="")
+    tag: bpy.props.StringProperty(default="")
+
+    mode: bpy.props.EnumProperty(
+        items=(("ADD", "Add", "Add tag"), ("REMOVE", "Remove", "Remove tag"), ("TOGGLE", "Toggle", "Toggle tag")),
+        default="TOGGLE",
+    )
+
+    def execute(self, context):
+        global_undo = context.preferences.edit.use_global_undo
+
+        try:
+            context.preferences.edit.use_global_undo = False
+
+            if self.action_name != "":
+                act = bpy.data.actions.get(self.action_name)
+
+                print(f"ActionName={self.action_name}, Tag={self.tag}, Mode={self.mode}")
+
+                if act:
+                    if self.mode == "ADD":
+                        act[self.tag] = True
+
+                    if self.mode == "REMOVE":
+                        if self.tag in act.keys():
+                            del act[self.tag]
+
+                    if self.mode == "TOGGLE":
+                        if self.tag in act.keys():
+                            act[self.tag] = not act[self.tag]
+                        else:
+                            act[self.tag] = True
+
+                print(f"{self.tag}={act[self.tag]}")
+
+        finally:
+            context.preferences.edit.use_global_undo = global_undo
+
+        return {"FINISHED"}
+
+
+class SKET_OT_set_exclude_action(bpy.types.Operator):
+    bl_idname = "sket.set_exclude_action"
+    bl_label = "SKET set exclude action"
+
+    bl_description = "set exclude action"
 
     action_name: bpy.props.StringProperty(default="")
 
@@ -277,7 +418,7 @@ class SKET_OT_select_action(bpy.types.Operator):
                 act = bpy.data.actions.get(self.action_name)
 
                 if act:
-                    act[SKET_PROP_EXPORT_ANIM] = True
+                    act[SKET_TAG_ACTION_EXCLUDE] = True
 
         finally:
             context.preferences.edit.use_global_undo = global_undo
@@ -303,7 +444,7 @@ class SKET_OT_unselect_action(bpy.types.Operator):
                 act = bpy.data.actions.get(self.action_name)
 
                 if act:
-                    act[SKET_PROP_EXPORT_ANIM] = False
+                    act[SKET_TAG_ACTION_EXCLUDE] = False
 
         finally:
             context.preferences.edit.use_global_undo = global_undo
@@ -315,8 +456,9 @@ classes = (
     SKET_PT_export_fbx_panel,
     SKET_OT_open_export_fbx_dialog,
     SKET_OT_export_fbx,
-    SKET_OT_select_action,
+    SKET_OT_set_exclude_action,
     SKET_OT_unselect_action,
+    SKET_OT_set_action_data_tag,
 )
 
 
@@ -345,7 +487,7 @@ def register():
             ("EDGE", "Edge", "Write edge smoothing"),
         ),
         description="Export smoothing information (prefer 'Normal Only' option if your target importer understand split normals)",
-        default="OFF",
+        default="FACE",
     )
 
     # PrimaryAxis
@@ -398,6 +540,11 @@ def register():
         default=False,
     )
 
+    # Meshを出力せず、Animationのみで出力するか
+    bpy.types.Scene.sket_mode_export_animation_only = bpy.props.BoolProperty(
+        name="Export Animation Only", description="Output animation without skin mesh", default=False
+    )
+
 
 def unregister():
     for cls in classes:
@@ -409,4 +556,5 @@ def unregister():
     del bpy.types.Scene.sket_bone_axis_primary_export
     del bpy.types.Scene.sket_bone_axis_secondary_export
     del bpy.types.Scene.sket_mode_export_animations
+    del bpy.types.Scene.sket_mode_export_animation_only
     del bpy.types.Scene.sket_mode_export_separate_each_anims

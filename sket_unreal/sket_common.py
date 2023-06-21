@@ -4,8 +4,10 @@ from typing import List
 
 SKET_TOOL_CATEGORY = "SKET"
 
+SKET_NAME_ARMATURE = "Armature"
 
-SKET_PROP_EXPORT_ANIM = "sket_export_anim"
+SKET_TAG_EXPORT = "sket_export"
+SKET_TAG_ACTION_EXCLUDE = "sket_action_exclude"
 
 SKET_E_MODE_EXPORT_ANIM_ALL = "ALL"
 SKET_E_MODE_EXPORT_ANIM_SELECT = "SELECT"
