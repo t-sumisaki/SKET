@@ -340,3 +340,40 @@ def revert_scale_x100(armature_name):
     bpy.ops.object.select_all(action="DESELECT")
 
     # TODO revert animation curves
+
+def insert_root_bone(armature_name: str):
+
+    print(armature_name)
+
+    print([arm.name for arm in bpy.data.armatures])
+    print([obj.name for obj in bpy.data.objects if is_armature(obj)])
+
+    # TODO: 汎用的に使える関数にする
+    arm_name = armature_name + SKET_EXPORT_OBJ_SUFFIX
+
+    arm_obj = bpy.data.objects[arm_name]
+    set_active_object(arm_obj.name)
+    bpy.ops.object.mode_set(mode="EDIT", toggle=False)
+
+
+    arm = bpy.data.armatures[arm_obj.data.name]
+    c_root = [bone for bone in arm.bones if bone.parent is None]
+
+    if len(c_root) != 1:
+        return
+    
+    c_root = c_root[0]
+
+    ebs = arm.edit_bones
+
+    eb = ebs.new("root")
+    eb.head = (0, 0, 0)
+    eb.tail = (0, 1, 0)
+
+    ebs[c_root.name].parent = eb
+
+    bpy.ops.object.mode_set(mode="OBJECT", toggle=False)
+
+
+
+

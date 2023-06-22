@@ -27,6 +27,7 @@ from .sket_fbx_export_functions import (
     rename_objects_for_export,
     revert_object_name,
     revert_action_scale_x100,
+    insert_root_bone,
 )
 
 import pathlib
@@ -111,6 +112,8 @@ class SKET_OT_open_export_fbx_dialog(bpy.types.Operator, ExportHelper):
             exp.label(text="Experimental:")
             exp.prop(context.scene, "sket_mode_auto_fix_duplicated_name")
 
+            exp.prop(context.scene, "sket_mode_auto_insert_rootbone")
+
     def draw_animation_section(self, context, parent):
         box = parent.box()
         box.label(text="Animations:")
@@ -189,6 +192,8 @@ class SKET_OT_export_fbx(bpy.types.Operator):
         mode_skeleton_only = context.scene.sket_mode_export_animation_only
         mode_fix_duplicated_name = context.scene.sket_mode_auto_fix_duplicated_name
 
+        mode_insert_rootbone = context.scene.sket_mode_auto_insert_rootbone
+
         try:
             # Initial checks
 
@@ -241,6 +246,9 @@ class SKET_OT_export_fbx(bpy.types.Operator):
             # Create copy objects
             list_target_objects = create_copy_objects(target_armature_name, no_armature_mode, mode_skeleton_only)
             list_target_actions = [a.name for a in bpy.data.actions]
+
+            if mode_insert_rootbone:
+                insert_root_bone(target_armature_name)
 
             if no_armature_mode:
                 apply_scale_x100_no_armature(list_target_objects)
@@ -551,7 +559,11 @@ def register():
     )
 
     bpy.types.Scene.sket_mode_auto_fix_duplicated_name = bpy.props.BoolProperty(
-        name="Auto Fix Duplicated Name", description="Auto fix duplicated object name (mesh <-> bone)", default=True
+        name="Auto Fix Duplicated Name", description="Fix duplicated object name automatically (mesh <-> bone)", default=True
+    )
+
+    bpy.types.Scene.sket_mode_auto_insert_rootbone = bpy.props.BoolProperty(
+        name="Auto Insert Root Bone", description="Insert root bone automatically", default=False
     )
 
 
