@@ -107,6 +107,10 @@ class SKET_OT_open_export_fbx_dialog(bpy.types.Operator, ExportHelper):
             axis.prop(context.scene, "sket_bone_axis_primary_export")
             axis.prop(context.scene, "sket_bone_axis_secondary_export")
 
+            exp = box.column(align=True)
+            exp.label(text="Experimental:")
+            exp.prop(context.scene, "sket_mode_auto_fix_duplicated_name")
+
     def draw_animation_section(self, context, parent):
         box = parent.box()
         box.label(text="Animations:")
@@ -183,6 +187,7 @@ class SKET_OT_export_fbx(bpy.types.Operator):
         no_armature_mode = False
 
         mode_skeleton_only = context.scene.sket_mode_export_animation_only
+        mode_fix_duplicated_name = context.scene.sket_mode_auto_fix_duplicated_name
 
         try:
             # Initial checks
@@ -246,7 +251,7 @@ class SKET_OT_export_fbx(bpy.types.Operator):
 
             # Select exportable only
             select_objects(list_target_objects)
-            rename_objects_for_export(list_target_objects)
+            rename_objects_for_export(list_target_objects, mode_fix_duplicated_name)
 
             object_types = {"EMPTY", "ARMATURE", "MESH"}
 
@@ -543,6 +548,10 @@ def register():
     # Meshを出力せず、Animationのみで出力するか
     bpy.types.Scene.sket_mode_export_animation_only = bpy.props.BoolProperty(
         name="Export Animation Only", description="Output animation without skin mesh", default=False
+    )
+
+    bpy.types.Scene.sket_mode_auto_fix_duplicated_name = bpy.props.BoolProperty(
+        name="Auto Fix Duplicated Name", description="Auto fix duplicated object name (mesh <-> bone)", default=True
     )
 
 
