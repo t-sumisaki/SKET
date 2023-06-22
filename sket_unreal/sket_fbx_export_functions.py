@@ -128,7 +128,8 @@ def delete_copy_objects(list_target_objects):
 def rename_objects_for_export(list_target_objects : List[str], fix_duplicated_name=False):
 
     # Bone名の一覧を取得
-    bones = [bone.name for bone in bpy.data.armatures[0].bones]
+    # チェックはLowerCaseに統一して行う
+    bones = [bone.name.lower() for bone in bpy.data.armatures[0].bones]
 
     print(f"bones: {bones}")
 
@@ -151,7 +152,7 @@ def rename_objects_for_export(list_target_objects : List[str], fix_duplicated_na
             
             if fix_duplicated_name:
                 print(f"check duplicated: {obj.name}")
-                if is_mesh(obj) and obj.name in bones:
+                if is_mesh(obj) and obj.name.lower() in bones:
                     print(f"rename duplicated: {obj.name}")
                     obj.name = obj.name + "_mesh"
 
