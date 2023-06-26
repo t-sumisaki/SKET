@@ -107,35 +107,58 @@ def create_copy_objects(armature_name: str, no_armature_mode=False, force_dummy_
 def delete_copy_objects(list_target_objects):
     arm_data = None
     for obj_name in list_target_objects:
-        obj = bpy.data.objects[obj_name]
+        if obj_name in bpy.data.objects:
+            obj = bpy.data.objects[obj_name]
 
-        if is_armature(obj):
-            arm_data = bpy.data.armatures.get(obj.data.name)
+            if is_armature(obj):
+                arm_data = bpy.data.armatures.get(obj.data.name)
 
-        bpy.data.objects.remove(obj, do_unlink=True)
 
-        try:
-            bpy.data.armatures.remove(arm_data, do_unlink=True)
-        except:
-            pass
+            try:
+                bpy.data.objects.remove(obj, do_unlink=True)
+                bpy.data.armatures.remove(arm_data, do_unlink=True)
+            except:
+                pass
 
     for mesh in bpy.data.meshes:
         if SKET_EXPORT_DUMMYMESH_NAME in mesh.name:
             bpy.data.meshes.remove(mesh, do_unlink=True)
 
 
-def rename_objects_for_export(list_target_objects):
+def rename_objects_for_export(list_target_objects : List[str], fix_duplicated_name=False):
+
+    # Bone名の一覧を取得
+    # チェックはLowerCaseに統一して行う
+    bones = [bone.name.lower() for bone in bpy.data.armatures[0].bones]
+
+    print(f"bones: {bones}")
+
+    renamed_obj = []
+
     # 対象となるObjectのオリジナルを一時的に別名にして退避する
     for obj_name in list_target_objects:
         origin_obj_name = obj_name.replace(SKET_EXPORT_OBJ_SUFFIX, "")
         if bpy.data.objects.get(origin_obj_name):
             bpy.data.objects[origin_obj_name].name = origin_obj_name + SKET_EXPORT_WORK_OBJ_SUFFIX
 
+            # 参照で取る
+            obj = bpy.data.objects[obj_name]
+
             # HACK: Armature名はUnrealEngine側で決まっているので、Armature名は固定値とする
-            if is_armature(bpy.data.objects[obj_name]):
-                bpy.data.objects[obj_name].name = SKET_NAME_ARMATURE
+            if is_armature(obj):
+                obj.name = SKET_NAME_ARMATURE
             else:
-                bpy.data.objects[obj_name].name = origin_obj_name
+                obj.name = origin_obj_name
+            
+            if fix_duplicated_name:
+                print(f"check duplicated: {obj.name}")
+                if is_mesh(obj) and obj.name.lower() in bones:
+                    print(f"rename duplicated: {obj.name}")
+                    obj.name = obj.name + "_mesh"
+
+                    renamed_obj.append(obj.name)
+
+    list_target_objects.extend(renamed_obj)
 
 
 def revert_object_name(list_target_objects):
@@ -317,3 +340,40 @@ def revert_scale_x100(armature_name):
     bpy.ops.object.select_all(action="DESELECT")
 
     # TODO revert animation curves
+
+def insert_root_bone(armature_name: str):
+
+    print(armature_name)
+
+    print([arm.name for arm in bpy.data.armatures])
+    print([obj.name for obj in bpy.data.objects if is_armature(obj)])
+
+    # TODO: 汎用的に使える関数にする
+    arm_name = armature_name + SKET_EXPORT_OBJ_SUFFIX
+
+    arm_obj = bpy.data.objects[arm_name]
+    set_active_object(arm_obj.name)
+    bpy.ops.object.mode_set(mode="EDIT", toggle=False)
+
+
+    arm = bpy.data.armatures[arm_obj.data.name]
+    c_root = [bone for bone in arm.bones if bone.parent is None]
+
+    if len(c_root) != 1:
+        return
+    
+    c_root = c_root[0]
+
+    ebs = arm.edit_bones
+
+    eb = ebs.new("root")
+    eb.head = (0, 0, 0)
+    eb.tail = (0, 1, 0)
+
+    ebs[c_root.name].parent = eb
+
+    bpy.ops.object.mode_set(mode="OBJECT", toggle=False)
+
+
+
+

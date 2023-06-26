@@ -27,7 +27,7 @@ def select_objects(obj_names):
         set_active_object(obj_name)
 
 
-def set_active_object(obj_name):
+def set_active_object(obj_name: str):
     """オブジェクトをアクティブ常態にする"""
     bpy.context.view_layer.objects.active = bpy.data.objects[obj_name]
     bpy.data.objects[obj_name].select_set(state=True)
