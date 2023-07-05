@@ -17,6 +17,7 @@ from .sket_common import (
     set_active_object,
     select_objects,
     partial_matched,
+    is_exclude_action,
 )
 
 from .sket_fbx_export_functions import (
@@ -83,8 +84,6 @@ class SKET_OT_open_export_fbx_dialog(bpy.types.Operator, ExportHelper):
     def draw(self, context):
         layout = self.layout
 
-        self.draw_mode_section(context, layout)
-
         self.draw_mesh_option_section(context, layout)
 
     def draw_mode_section(self, context, parent):
@@ -134,6 +133,17 @@ class SKETExportSubPanel:
         sfile = context.space_data
         operator = sfile.active_operator
         return operator.bl_idname == "SKET_OT_open_export_fbx_dialog"
+
+
+class SKET_PT_export_mode(bpy.types.Panel, SKETExportSubPanel):
+    bl_label = "Mode"
+
+    def draw(self, context):
+        layout = self.layout
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        layout.prop(context.scene, "sket_mode_export_animation_only")
 
 
 class SKET_PT_export_actions(bpy.types.Panel, SKETExportSubPanel):
@@ -499,6 +509,7 @@ class SKET_OT_set_notexport_action(bpy.types.Operator):
 classes = (
     SKET_PT_export_fbx_panel,
     SKET_OT_open_export_fbx_dialog,
+    SKET_PT_export_mode,
     SKET_PT_export_actions,
     SKET_OT_export_fbx,
     SKET_OT_set_export_action,
