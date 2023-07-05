@@ -68,3 +68,7 @@ def get_object_relation_depth(obj, level=0) -> int:
         return level
 
     return get_object_relation_depth(obj.parent, level + 1)
+
+
+def partial_matched(keyword:str, target:str) -> bool:
+    return keyword.lower() in target.lower()

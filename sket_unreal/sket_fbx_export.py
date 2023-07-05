@@ -16,6 +16,7 @@ from .sket_common import (
     is_empty,
     set_active_object,
     select_objects,
+    partial_matched,
 )
 
 from .sket_fbx_export_functions import (
@@ -77,18 +78,23 @@ class SKET_OT_open_export_fbx_dialog(bpy.types.Operator, ExportHelper):
     filename_ext = ".fbx"
     filter_glob: bpy.props.StringProperty(default="*.fbx", options={"HIDDEN"})
 
+    action_filter: bpy.props.StringProperty(name="Filter", default="", options={"TEXTEDIT_UPDATE"})
+
     def draw(self, context):
         layout = self.layout
 
         self.draw_mode_section(context, layout)
 
         self.draw_mesh_option_section(context, layout)
-        self.draw_animation_section(context, layout)
 
     def draw_mode_section(self, context, parent):
-        box = parent.box()
-        box.label(text="Mode:")
-        box.column(align=True).prop(context.scene, "sket_mode_export_animation_only")
+        col = parent.column(align=True)
+        row = col.row(align=True)
+        row.label(text="Mode:")
+
+        # sket_mode_export_animation_only
+        row = col.row(align=True)
+        row.prop(context.scene, "sket_mode_export_animation_only")
 
     def draw_mesh_option_section(self, context, parent):
         if not context.scene.sket_mode_export_animation_only:
@@ -114,22 +120,48 @@ class SKET_OT_open_export_fbx_dialog(bpy.types.Operator, ExportHelper):
 
             exp.prop(context.scene, "sket_mode_auto_insert_rootbone")
 
-    def draw_animation_section(self, context, parent):
-        box = parent.box()
-        box.label(text="Animations:")
+    def execute(self, context):
+        return SKET_OT_export_fbx.execute(self, context)
 
-        # export animation
-        anim_mode = box.column(align=True)
-        anim_mode.label(text="Export Mode:")
-        anim_mode.prop(context.scene, "sket_mode_export_animations", text="")
+
+class SKETExportSubPanel:
+    bl_space_type = "FILE_BROWSER"
+    bl_region_type = "TOOL_PROPS"
+    bl_parent_id = "FILE_PT_operator"
+
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+        return operator.bl_idname == "SKET_OT_open_export_fbx_dialog"
+
+
+class SKET_PT_export_actions(bpy.types.Panel, SKETExportSubPanel):
+
+    bl_label = "Animations"
+
+    def draw(self, context):
+        layout = self.layout
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        layout.prop(context.scene, "sket_mode_export_animations", text="Export Mode")
 
         if context.scene.sket_mode_export_animations == SKET_E_MODE_EXPORT_ANIM_SELECT:
-            col = box.column(align=True)
+            layout.prop(operator, "action_filter", text="Filter", icon="FILTER")
+
+            actions = layout.box()
+
+            keyword = operator.action_filter
 
             if len(bpy.data.actions) > 0:
                 # Actionを選択する用のボタンを作成
                 for act in bpy.data.actions:
-                    act_row = col.row(align=True)
+                    if keyword != "" and not partial_matched(keyword, act.name):
+                        continue
+
+                    act_row = actions.row(align=True)
                     act_row.label(text=act.name)
 
                     checkbox = "CHECKBOX_HLT"
@@ -144,14 +176,10 @@ class SKET_OT_open_export_fbx_dialog(bpy.types.Operator, ExportHelper):
 
             else:
                 # Actionが存在しない場合はラベルのみ
-                col.row(align=True).label(text="No actions to export")
+                actions.row(align=True).label(text="No actions to export")
 
         if context.scene.sket_mode_export_animations in (SKET_E_MODE_EXPORT_ANIM_ALL, SKET_E_MODE_EXPORT_ANIM_SELECT):
-            col = box.column(align=True)
-            col.prop(context.scene, "sket_mode_export_separate_each_anims", text="Separate FBX each actions")
-
-    def execute(self, context):
-        return SKET_OT_export_fbx.execute(self, context)
+            layout.prop(context.scene, "sket_mode_export_separate_each_anims", text="Separate FBX each actions")
 
 
 class SKET_OT_export_fbx(bpy.types.Operator):
@@ -472,6 +500,7 @@ classes = (
     SKET_OT_set_exclude_action,
     SKET_OT_unselect_action,
     SKET_OT_set_action_data_tag,
+    SKET_PT_export_actions,
 )
 
 
@@ -559,7 +588,9 @@ def register():
     )
 
     bpy.types.Scene.sket_mode_auto_fix_duplicated_name = bpy.props.BoolProperty(
-        name="Auto Fix Duplicated Name", description="Fix duplicated object name automatically (mesh <-> bone)", default=True
+        name="Auto Fix Duplicated Name",
+        description="Fix duplicated object name automatically (mesh <-> bone)",
+        default=True,
     )
 
     bpy.types.Scene.sket_mode_auto_insert_rootbone = bpy.props.BoolProperty(

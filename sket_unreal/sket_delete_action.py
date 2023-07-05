@@ -13,16 +13,21 @@ class SKET_PT_delete_action(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
 
-        col = layout.column(align=True)
-        col.label(text="Action list:")
+        layout.label(text="Action list:")
+        layout.prop(context.scene, "sket_delete_action_filter", text="", icon="FILTER")
 
         col = layout.column(align=True)
 
         if len(bpy.data.actions) > 0:
+            keyword = context.scene.sket_delete_action_filter
             for action in bpy.data.actions:
+
+                if keyword != "" and not sket_common.partial_matched(keyword, action.name):
+                    continue
+
                 _row = col.row(align=True)
                 _row.label(text=action.name)
-                _op = _row.operator(SKET_OT_delete_action.bl_idname, text="", icon="X")
+                _op = _row.operator(SKET_OT_delete_action.bl_idname, text="", icon="TRASH")
                 _op.action_name = action.name
         else:
             _row = col.row(align=True)
@@ -65,8 +70,12 @@ classes = (SKET_PT_delete_action, SKET_OT_delete_action)
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
+    
+    bpy.types.Scene.sket_delete_action_filter = bpy.props.StringProperty(name="Filter", default="", options={"TEXTEDIT_UPDATE"})
 
 
 def unregsiter():
     for cls in classes:
         bpy.utils.unregister_class(cls)
+    
+    del bpy.types.Scene.sket_delete_action_filter
