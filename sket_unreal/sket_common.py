@@ -1,6 +1,6 @@
 import bpy
 
-from typing import List
+from typing import List, Any
 
 SKET_TOOL_CATEGORY = "SKET"
 
@@ -72,3 +72,9 @@ def get_object_relation_depth(obj, level=0) -> int:
 
 def partial_matched(keyword:str, target:str) -> bool:
     return keyword.lower() in target.lower()
+
+def action_has_tag(act: Any, tag: str) -> bool:
+    return tag in act.keys() and act[tag] == True
+
+def is_exclude_action(act: Any) -> bool:
+    return action_has_tag(act, SKET_TAG_ACTION_EXCLUDE)

@@ -137,7 +137,6 @@ class SKETExportSubPanel:
 
 
 class SKET_PT_export_actions(bpy.types.Panel, SKETExportSubPanel):
-
     bl_label = "Animations"
 
     def draw(self, context):
@@ -150,11 +149,16 @@ class SKET_PT_export_actions(bpy.types.Panel, SKETExportSubPanel):
 
         if context.scene.sket_mode_export_animations == SKET_E_MODE_EXPORT_ANIM_SELECT:
             layout.prop(operator, "action_filter", text="Filter", icon="FILTER")
-
-            actions = layout.box()
-
             keyword = operator.action_filter
 
+            op_row = layout.row(align=True)
+            select_all_op = op_row.operator(SKET_OT_set_export_all_actions.bl_idname, text="Select All")
+            select_all_op.action_filter = keyword
+
+            unselect_all_op = op_row.operator(SKET_OT_set_notexport_all_actions.bl_idname, text="Unselect All")
+            unselect_all_op.action_filter = keyword
+
+            actions = layout.box()
             if len(bpy.data.actions) > 0:
                 # Actionを選択する用のボタンを作成
                 for act in bpy.data.actions:
@@ -164,15 +168,12 @@ class SKET_PT_export_actions(bpy.types.Panel, SKETExportSubPanel):
                     act_row = actions.row(align=True)
                     act_row.label(text=act.name)
 
-                    checkbox = "CHECKBOX_HLT"
+                    if is_exclude_action(act):
+                        _op = act_row.operator(SKET_OT_set_export_action.bl_idname, text="", icon="CHECKBOX_DEHLT")
+                    else:
+                        _op = act_row.operator(SKET_OT_set_notexport_action.bl_idname, text="", icon="CHECKBOX_HLT")
 
-                    if SKET_TAG_ACTION_EXCLUDE in act.keys() and act[SKET_TAG_ACTION_EXCLUDE] == True:
-                        checkbox = "CHECKBOX_DEHLT"
-
-                    _op = act_row.operator(SKET_OT_set_action_data_tag.bl_idname, text="", icon=checkbox)
                     _op.action_name = act.name
-                    _op.tag = SKET_TAG_ACTION_EXCLUDE
-                    _op.mode = "TOGGLE"
 
             else:
                 # Actionが存在しない場合はラベルのみ
@@ -433,62 +434,64 @@ class SKET_OT_set_action_data_tag(bpy.types.Operator):
                         else:
                             act[self.tag] = True
 
-                print(f"{self.tag}={act[self.tag]}")
-
         finally:
             context.preferences.edit.use_global_undo = global_undo
 
         return {"FINISHED"}
 
 
-class SKET_OT_set_exclude_action(bpy.types.Operator):
-    bl_idname = "sket.set_exclude_action"
-    bl_label = "SKET set exclude action"
+class SKET_OT_set_export_all_actions(bpy.types.Operator):
+    bl_idname = "sket.set_export_all_actions"
+    bl_label = "Set to export all (or filtered) actions"
 
-    bl_description = "set exclude action"
-
-    action_name: bpy.props.StringProperty(default="")
+    action_filter: bpy.props.StringProperty(default="")
 
     def execute(self, context):
-        global_undo = context.preferences.edit.use_global_undo
+        for act in bpy.data.actions:
+            if self.action_filter != "" and not partial_matched(self.action_filter, act.name):
+                continue
 
-        try:
-            context.preferences.edit.use_global_undo = False
-
-            if self.action_name != "":
-                act = bpy.data.actions.get(self.action_name)
-
-                if act:
-                    act[SKET_TAG_ACTION_EXCLUDE] = True
-
-        finally:
-            context.preferences.edit.use_global_undo = global_undo
+            bpy.ops.sket.set_action_data_tag(action_name=act.name, tag=SKET_TAG_ACTION_EXCLUDE, mode="REMOVE")
 
         return {"FINISHED"}
 
 
-class SKET_OT_unselect_action(bpy.types.Operator):
-    bl_idname = "sket.unselect_action"
-    bl_label = "SKET unselect action"
+class SKET_OT_set_notexport_all_actions(bpy.types.Operator):
+    bl_idname = "sket.set_notexport_all_actions"
+    bl_label = "Set to not export all (or filtered) actions"
 
-    bl_description = "Unselect Action"
+    action_filter: bpy.props.StringProperty(default="")
+
+    def execute(self, context):
+        for act in bpy.data.actions:
+            if self.action_filter != "" and not partial_matched(self.action_filter, act.name):
+                continue
+
+            bpy.ops.sket.set_action_data_tag(action_name=act.name, tag=SKET_TAG_ACTION_EXCLUDE, mode="ADD")
+
+        return {"FINISHED"}
+
+
+class SKET_OT_set_export_action(bpy.types.Operator):
+    bl_idname = "sket.set_export_action"
+    bl_label = "Set to export"
 
     action_name: bpy.props.StringProperty(default="")
 
     def execute(self, context):
-        global_undo = context.preferences.edit.use_global_undo
+        bpy.ops.sket.set_action_data_tag(action_name=self.action_name, tag=SKET_TAG_ACTION_EXCLUDE, mode="REMOVE")
 
-        try:
-            context.preferences.edit.use_global_undo = False
+        return {"FINISHED"}
 
-            if self.action_name != "":
-                act = bpy.data.actions.get(self.action_name)
 
-                if act:
-                    act[SKET_TAG_ACTION_EXCLUDE] = False
+class SKET_OT_set_notexport_action(bpy.types.Operator):
+    bl_idname = "sket.set_notexport_action"
+    bl_label = "Set to NOT export"
 
-        finally:
-            context.preferences.edit.use_global_undo = global_undo
+    action_name: bpy.props.StringProperty(default="")
+
+    def execute(self, context):
+        bpy.ops.sket.set_action_data_tag(action_name=self.action_name, tag=SKET_TAG_ACTION_EXCLUDE, mode="ADD")
 
         return {"FINISHED"}
 
@@ -496,11 +499,13 @@ class SKET_OT_unselect_action(bpy.types.Operator):
 classes = (
     SKET_PT_export_fbx_panel,
     SKET_OT_open_export_fbx_dialog,
-    SKET_OT_export_fbx,
-    SKET_OT_set_exclude_action,
-    SKET_OT_unselect_action,
-    SKET_OT_set_action_data_tag,
     SKET_PT_export_actions,
+    SKET_OT_export_fbx,
+    SKET_OT_set_export_action,
+    SKET_OT_set_notexport_action,
+    SKET_OT_set_export_all_actions,
+    SKET_OT_set_notexport_all_actions,
+    SKET_OT_set_action_data_tag,
 )
 
 
