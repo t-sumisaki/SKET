@@ -1,6 +1,6 @@
-from typing import List
+from typing import List, Any
 import bpy
-from bpy.types import Context
+from bpy.types import AnyType, Context, UILayout
 from bpy_extras.io_utils import ExportHelper
 from .sket_common import (
     # constants
@@ -35,22 +35,6 @@ from .sket_fbx_export_functions import (
 import pathlib
 
 
-def get_export_actions(context) -> List[str]:
-    export_actions = []
-
-    if context.scene.sket_mode_export_animations == SKET_E_MODE_EXPORT_ANIM_NONE:
-        return export_actions
-
-    for act in bpy.data.actions:
-        if context.scene.sket_mode_export_animations == SKET_E_MODE_EXPORT_ANIM_SELECT:
-            if SKET_TAG_ACTION_EXCLUDE in act.keys() and act[SKET_TAG_ACTION_EXCLUDE] == True:
-                continue
-
-        export_actions.append(act.name)
-
-    return export_actions
-
-
 class SKET_PT_export_fbx_panel(bpy.types.Panel):
     """
     FBXExport用のパネルを作成
@@ -80,6 +64,8 @@ class SKET_OT_open_export_fbx_dialog(bpy.types.Operator, ExportHelper):
     filter_glob: bpy.props.StringProperty(default="*.fbx", options={"HIDDEN"})
 
     action_filter: bpy.props.StringProperty(name="Filter", default="", options={"TEXTEDIT_UPDATE"})
+
+    action_index: bpy.props.IntProperty(default=0)
 
     def draw(self, context):
         layout = self.layout
@@ -158,6 +144,7 @@ class SKET_PT_export_actions(bpy.types.Panel, SKETExportSubPanel):
         layout.prop(context.scene, "sket_mode_export_animations", text="Export Mode")
 
         if context.scene.sket_mode_export_animations == SKET_E_MODE_EXPORT_ANIM_SELECT:
+            layout.separator()
             layout.prop(operator, "action_filter", text="Filter", icon="FILTER")
             keyword = operator.action_filter
 
@@ -168,29 +155,65 @@ class SKET_PT_export_actions(bpy.types.Panel, SKETExportSubPanel):
             unselect_all_op = op_row.operator(SKET_OT_set_notexport_all_actions.bl_idname, text="Unselect All")
             unselect_all_op.action_filter = keyword
 
-            actions = layout.box()
             if len(bpy.data.actions) > 0:
-                # Actionを選択する用のボタンを作成
-                for act in bpy.data.actions:
-                    if keyword != "" and not partial_matched(keyword, act.name):
-                        continue
-
-                    act_row = actions.row(align=True)
-                    act_row.label(text=act.name)
-
-                    if is_exclude_action(act):
-                        _op = act_row.operator(SKET_OT_set_export_action.bl_idname, text="", icon="CHECKBOX_DEHLT")
-                    else:
-                        _op = act_row.operator(SKET_OT_set_notexport_action.bl_idname, text="", icon="CHECKBOX_HLT")
-
-                    _op.action_name = act.name
+                row = layout.row()
+                row.template_list("SKET_UL_export_actions", "", bpy.data, "actions", operator, "action_index")
 
             else:
                 # Actionが存在しない場合はラベルのみ
-                actions.row(align=True).label(text="No actions to export")
+                layout.row(align=True).label(text="No actions to export")
 
         if context.scene.sket_mode_export_animations in (SKET_E_MODE_EXPORT_ANIM_ALL, SKET_E_MODE_EXPORT_ANIM_SELECT):
             layout.prop(context.scene, "sket_mode_export_separate_each_anims", text="Separate FBX each actions")
+
+
+class SKET_UL_export_actions(bpy.types.UIList):
+    bl_label = ""
+
+    def draw_item(
+        self,
+        context: Context | None,
+        layout: UILayout,
+        data: AnyType | None,
+        item: AnyType | None,
+        icon_type: int | None,
+        active_data: AnyType,
+        active_property: str,
+        index: Any | None = 0,
+        flt_flag: Any | None = 0,
+    ):
+        act = item
+        icon_type = "CHECKBOX_HLT" if act.sket_export_action else "CHECKBOX_DEHLT"
+
+        if self.layout_type in {"DEFAULT", "COMPACT"}:
+            layout.label(text=act.name)
+            layout.prop(act, "sket_export_action", icon_only=True, emboss=False, icon=icon_type)
+        elif self.layout_type in {"GRID"}:
+            layout.alignment = "CENTER"
+            layout.label(text=act.name)
+
+    def draw_filter(self, context: Context | None, layout: UILayout):
+        pass
+
+    def filter_items(self, context: Context | None, data: AnyType | None, property: str | Any):
+        acts = getattr(data, property)
+        helper_funcs = bpy.types.UI_UL_list
+
+        flt_flags = []
+        flt_neworder = []
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        if operator.action_filter:
+            flt_flags = helper_funcs.filter_items_by_name(
+                operator.action_filter, self.bitflag_filter_item, acts, "name"
+            )
+
+        if not flt_flags:
+            flt_flags = [self.bitflag_filter_item] * len(acts)
+
+        return flt_flags, flt_neworder
 
 
 class SKET_OT_export_fbx(bpy.types.Operator):
@@ -310,7 +333,7 @@ class SKET_OT_export_fbx(bpy.types.Operator):
             if context.scene.sket_mode_export_separate_each_anims:
                 basefilepath = pathlib.Path(self.filepath)
 
-                for export_act in get_export_actions(context):
+                for export_act in [act for act in bpy.data.actions if act.sket_export_action]:
                     filepath = basefilepath.parent / f"{basefilepath.stem}_{export_act}{basefilepath.suffix}"
 
                     print(f"Export file: {filepath}")
@@ -348,7 +371,7 @@ class SKET_OT_export_fbx(bpy.types.Operator):
             else:
                 # Actionに出力用のタグを設定する
 
-                export_actions = get_export_actions(context)
+                export_actions = [act for act in bpy.data.actions if act.sket_export_action]
 
                 for act in bpy.data.actions:
                     if act.name in export_actions:
@@ -452,32 +475,48 @@ class SKET_OT_set_action_data_tag(bpy.types.Operator):
 
 class SKET_OT_set_export_all_actions(bpy.types.Operator):
     bl_idname = "sket.set_export_all_actions"
-    bl_label = "Set to export all (or filtered) actions"
+    bl_label = "Select All"
+    bl_description = "Set to export all (or filtered) actions"
 
     action_filter: bpy.props.StringProperty(default="")
 
     def execute(self, context):
-        for act in bpy.data.actions:
-            if self.action_filter != "" and not partial_matched(self.action_filter, act.name):
-                continue
+        flt_flags = []
+        helper_funcs = bpy.types.UI_UL_list
+        acts = bpy.data.actions
 
-            bpy.ops.sket.set_action_data_tag(action_name=act.name, tag=SKET_TAG_ACTION_EXCLUDE, mode="REMOVE")
+        if self.action_filter:
+            flt_flags = helper_funcs.filter_items_by_name(self.action_filter, 1, acts, "name")
+        if not flt_flags:
+            flt_flags = [1] * len(acts)
+
+        for act, flg in zip(bpy.data.actions, flt_flags):
+            if flg:
+                act.sket_export_action = True
 
         return {"FINISHED"}
 
 
 class SKET_OT_set_notexport_all_actions(bpy.types.Operator):
     bl_idname = "sket.set_notexport_all_actions"
-    bl_label = "Set to not export all (or filtered) actions"
+    bl_label = "Unselect All"
+    bl_description = "Set to not export all (or filtered) actions"
 
     action_filter: bpy.props.StringProperty(default="")
 
     def execute(self, context):
-        for act in bpy.data.actions:
-            if self.action_filter != "" and not partial_matched(self.action_filter, act.name):
-                continue
+        flt_flags = []
+        helper_funcs = bpy.types.UI_UL_list
+        acts = bpy.data.actions
 
-            bpy.ops.sket.set_action_data_tag(action_name=act.name, tag=SKET_TAG_ACTION_EXCLUDE, mode="ADD")
+        if self.action_filter:
+            flt_flags = helper_funcs.filter_items_by_name(self.action_filter, 1, acts, "name")
+        if not flt_flags:
+            flt_flags = [1] * len(acts)
+
+        for act, flg in zip(bpy.data.actions, flt_flags):
+            if flg:
+                act.sket_export_action = False
 
         return {"FINISHED"}
 
@@ -517,6 +556,7 @@ classes = (
     SKET_OT_set_export_all_actions,
     SKET_OT_set_notexport_all_actions,
     SKET_OT_set_action_data_tag,
+    SKET_UL_export_actions,
 )
 
 
@@ -613,6 +653,10 @@ def register():
         name="Auto Insert Root Bone", description="Insert root bone automatically", default=False
     )
 
+    bpy.types.Action.sket_export_action = bpy.props.BoolProperty(
+        name="Export Action", description="Export animation when export fbx", default=True
+    )
+
 
 def unregister():
     for cls in classes:
@@ -626,3 +670,5 @@ def unregister():
     del bpy.types.Scene.sket_mode_export_animations
     del bpy.types.Scene.sket_mode_export_animation_only
     del bpy.types.Scene.sket_mode_export_separate_each_anims
+
+    del bpy.types.Action.sket_export_action
