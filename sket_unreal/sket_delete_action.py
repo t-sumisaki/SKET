@@ -1,4 +1,6 @@
+from typing import Any, List
 import bpy
+from bpy.types import AnyType, Context, UILayout
 
 from . import sket_common
 
@@ -13,25 +15,31 @@ class SKET_PT_delete_action(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
 
-        layout.label(text="Action list:")
-        layout.prop(context.scene, "sket_delete_action_filter", text="", icon="FILTER")
+        row = layout.row()
+        row.template_list("SKET_UL_delete_actions", "", bpy.data, "actions", context.scene, "sket_delete_action_index")
 
-        col = layout.column(align=True)
 
-        if len(bpy.data.actions) > 0:
-            keyword = context.scene.sket_delete_action_filter
-            for action in bpy.data.actions:
-
-                if keyword != "" and not sket_common.partial_matched(keyword, action.name):
-                    continue
-
-                _row = col.row(align=True)
-                _row.label(text=action.name)
-                _op = _row.operator(SKET_OT_delete_action.bl_idname, text="", icon="TRASH")
-                _op.action_name = action.name
-        else:
-            _row = col.row(align=True)
-            _row.label(text="No actions")
+class SKET_UL_delete_actions(bpy.types.UIList):
+    def draw_item(
+        self,
+        context: Context | None,
+        layout: UILayout,
+        data: AnyType | None,
+        item: AnyType | None,
+        icon: int | None,
+        active_data: AnyType,
+        active_property: str,
+        index: Any | None = 0,
+        flt_flag: Any | None = 0,
+    ):
+        act = item
+        if self.layout_type in {"DEFAULT", "COMPACT"}:
+            layout.label(text=act.name)
+            _op = layout.operator(SKET_OT_delete_action.bl_idname, text="", icon="TRASH")
+            _op.action_name = act.name
+        elif self.layout_type in {"GRID"}:
+            layout.alignment = "CENTER"
+            layout.label(text=act.name)
 
 
 class SKET_OT_delete_action(bpy.types.Operator):
@@ -64,18 +72,18 @@ class SKET_OT_delete_action(bpy.types.Operator):
         return {"FINISHED"}
 
 
-classes = (SKET_PT_delete_action, SKET_OT_delete_action)
+classes = (SKET_PT_delete_action, SKET_OT_delete_action, SKET_UL_delete_actions)
 
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
-    
-    bpy.types.Scene.sket_delete_action_filter = bpy.props.StringProperty(name="Filter", default="", options={"TEXTEDIT_UPDATE"})
+
+    bpy.types.Scene.sket_delete_action_index = bpy.props.IntProperty(default=-1)
 
 
 def unregsiter():
     for cls in classes:
         bpy.utils.unregister_class(cls)
-    
-    del bpy.types.Scene.sket_delete_action_filter
+
+    del bpy.types.Scene.sket_delete_action_index
