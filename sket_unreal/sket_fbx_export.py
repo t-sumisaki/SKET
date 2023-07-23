@@ -331,12 +331,6 @@ class SKET_OT_export_fbx(bpy.types.Operator, ExportHelper, SKETExportPropertyMix
 
     action_index: bpy.props.IntProperty(default=0)
 
-    batch_mode: bpy.props.EnumProperty(items=(("OFF", "OFF", "OFF"), ("ON", "ON", "ON")), default="OFF")
-
-    @property
-    def check_extension(self):
-        self.check_extension = self.batch_mode == "OFF"
-
     def draw(self, context):
         pass
 
