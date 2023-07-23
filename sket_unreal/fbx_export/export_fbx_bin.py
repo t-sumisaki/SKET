@@ -2173,26 +2173,19 @@ def fbx_animations(scene_data):
             org_act = ob.animation_data.action
             path_resolve = ob.path_resolve
 
-            export_mode = bpy.context.scene.sket_mode_export_animations
-
             for act in bpy.data.actions:
 
                 # HACK: === Export Action filter
 
                 from ..sket_common import (
-                    SKET_E_MODE_EXPORT_ANIM_ALL,
-                    SKET_E_MODE_EXPORT_ANIM_SELECT,
-
                     SKET_TAG_EXPORT
                 )
-                
-                export_action = False
 
-                if SKET_TAG_EXPORT in act.keys():
-                    if act[SKET_TAG_EXPORT] == True:
-                        export_action = True
                 
-                if not export_action:
+                if SKET_TAG_EXPORT not in act.keys():
+                    continue
+                
+                if act[SKET_TAG_EXPORT] == False:
                     continue
 
                 # HACK: === END Export Action Filter
