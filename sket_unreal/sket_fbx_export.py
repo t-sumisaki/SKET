@@ -220,6 +220,8 @@ class SKET_PT_export_mode(bpy.types.Panel, SKETExportSubPanel):
         layout = self.layout
         sfile = context.space_data
         operator = sfile.active_operator
+        layout.use_property_split = True
+        layout.use_property_decorate = False
 
         col = layout.column(align=True)
         col.prop(operator, "export_animation_only")
