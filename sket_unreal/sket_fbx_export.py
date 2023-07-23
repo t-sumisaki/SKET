@@ -102,24 +102,24 @@ class SKETExportPropertyMixin:
     )
 
     # アニメーション毎にファイルを分けて出力するか
-    mode_export_separate_each_anims: bpy.props.BoolProperty(
+    separate_file_each_anims: bpy.props.BoolProperty(
         name="Separate File For Each Animation",
         description="Output a separate file for each animation",
         default=False,
     )
 
     # Meshを出力せず、Animationのみで出力するか
-    mode_export_animation_only: bpy.props.BoolProperty(
+    export_animation_only: bpy.props.BoolProperty(
         name="Export Animation Only", description="Output animation without skin mesh", default=False
     )
 
-    mode_auto_fix_duplicated_name: bpy.props.BoolProperty(
+    auto_fix_duplicate_name: bpy.props.BoolProperty(
         name="Auto Fix Duplicated Name",
         description="Fix duplicated object name automatically (mesh <-> bone)",
         default=True,
     )
 
-    mode_auto_insert_rootbone: bpy.props.BoolProperty(
+    insert_rootbone: bpy.props.BoolProperty(
         name="Auto Insert Root Bone", description="Insert root bone automatically", default=False
     )
 
@@ -164,7 +164,7 @@ class SKET_PT_export_mesh(bpy.types.Panel, SKETExportSubPanel):
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.active = not operator.mode_export_animation_only
+        layout.active = not operator.export_animation_only
 
         layout.use_property_split = True
         layout.use_property_decorate = False
@@ -184,7 +184,7 @@ class SKET_PT_export_mesh_axis(bpy.types.Panel, SKETExportSubPanel):
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.active = not operator.mode_export_animation_only
+        layout.active = not operator.export_animation_only
 
         layout.use_property_split = True
         layout.use_property_decorate = False
@@ -203,14 +203,14 @@ class SKET_PT_export_mesh_options(bpy.types.Panel, SKETExportSubPanel):
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.active = not operator.mode_export_animation_only
+        layout.active = not operator.export_animation_only
 
         layout.use_property_split = True
         layout.use_property_decorate = False
 
         col = layout.column(align=True)
-        col.prop(operator, "mode_auto_fix_duplicated_name")
-        col.prop(operator, "mode_auto_insert_rootbone")
+        col.prop(operator, "auto_fix_duplicate_name")
+        col.prop(operator, "insert_rootbone")
 
 
 class SKET_PT_export_mode(bpy.types.Panel, SKETExportSubPanel):
@@ -222,7 +222,7 @@ class SKET_PT_export_mode(bpy.types.Panel, SKETExportSubPanel):
         operator = sfile.active_operator
 
         col = layout.column(align=True)
-        col.prop(operator, "mode_export_animation_only")
+        col.prop(operator, "export_animation_only")
 
 
 class SKET_PT_export_actions(bpy.types.Panel, SKETExportSubPanel):
@@ -239,7 +239,7 @@ class SKET_PT_export_actions(bpy.types.Panel, SKETExportSubPanel):
 
         col = layout.column(align=True)
         col.active = operator.mode_export_animations in (SKET_E_MODE_EXPORT_ANIM_ALL, SKET_E_MODE_EXPORT_ANIM_SELECT)
-        col.prop(operator, "mode_export_separate_each_anims", text="Separate FBX each actions")
+        col.prop(operator, "separate_file_each_anims", text="Separate FBX each actions")
 
         col = layout.column(align=True)
         col.prop(
@@ -365,10 +365,10 @@ class SKET_OT_export_fbx(bpy.types.Operator, ExportHelper, SKETExportPropertyMix
 
         no_armature_mode = False
 
-        mode_skeleton_only = self.mode_export_animation_only
-        mode_fix_duplicated_name = self.mode_auto_fix_duplicated_name
+        mode_skeleton_only = self.export_animation_only
+        mode_fix_duplicated_name = self.auto_fix_duplicate_name
 
-        mode_insert_rootbone = self.mode_auto_insert_rootbone
+        mode_insert_rootbone = self.insert_rootbone
 
         try:
             # Initial checks
@@ -450,7 +450,7 @@ class SKET_OT_export_fbx(bpy.types.Operator, ExportHelper, SKETExportPropertyMix
             if self.mode_export_animations == "SELECT":
                 export_actions = [act.name for act in bpy.data.actions if act.sket_export_action]
 
-            if self.mode_export_separate_each_anims:
+            if self.separate_file_each_anims:
                 basefilepath = pathlib.Path(self.filepath)
 
                 for export_act in export_actions:
