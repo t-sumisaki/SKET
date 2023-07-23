@@ -35,6 +35,95 @@ from .sket_fbx_export_functions import (
 import pathlib
 
 
+class SKETExportPropertyMixin:
+    # DeformBoneのみ出力
+    use_armature_deform_only: bpy.props.BoolProperty(
+        name="Deform Armature Only",
+        description="If True, export only deform (weight-painted) armature",
+        default=False,
+    )
+
+    # 出力スケール
+    global_scale: bpy.props.FloatProperty(name="Global Scale", default=1.0, description="Global scale applied")
+
+    # スムージング種別
+    mesh_smooth_type: bpy.props.EnumProperty(
+        name="Smoothing",
+        items=(
+            ("OFF", "Normals Only", "Export only normals"),
+            ("FACE", "Face", "Write face smoothing"),
+            ("EDGE", "Edge", "Write edge smoothing"),
+        ),
+        description="Export smoothing information (prefer 'Normal Only' option if your target importer understand split normals)",
+        default="FACE",
+    )
+
+    # PrimaryAxis
+    bone_axis_primary_export: bpy.props.EnumProperty(
+        name="Primary Bone Axis",
+        items=(
+            ("X", "X Axis", ""),
+            ("Y", "Y Axis", ""),
+            ("Z", "Z Axis", ""),
+            ("-X", "-X Axis", ""),
+            ("-Y", "-Y Axis", ""),
+            ("-Z", "-Z Axis", ""),
+        ),
+        default="Z",
+    )
+
+    # SecondaryAxis
+    bone_axis_secondary_export: bpy.props.EnumProperty(
+        name="Secondary Bone Axis",
+        items=(
+            ("X", "X Axis", ""),
+            ("Y", "Y Axis", ""),
+            ("Z", "Z Axis", ""),
+            ("-X", "-X Axis", ""),
+            ("-Y", "-Y Axis", ""),
+            ("-Z", "-Z Axis", ""),
+        ),
+        default="X",
+    )
+
+    # アニメーション出力種別
+    mode_export_animations: bpy.props.EnumProperty(
+        name="Export animation mode",
+        items=(
+            (SKET_E_MODE_EXPORT_ANIM_ALL, "All animation export", ""),
+            (SKET_E_MODE_EXPORT_ANIM_SELECT, "Select export animation", ""),
+            (
+                SKET_E_MODE_EXPORT_ANIM_NONE,
+                "No animation export (Armature only)",
+                "",
+            ),
+        ),
+        default=SKET_E_MODE_EXPORT_ANIM_ALL,
+    )
+
+    # アニメーション毎にファイルを分けて出力するか
+    mode_export_separate_each_anims: bpy.props.BoolProperty(
+        name="Separate File For Each Animation",
+        description="Output a separate file for each animation",
+        default=False,
+    )
+
+    # Meshを出力せず、Animationのみで出力するか
+    mode_export_animation_only: bpy.props.BoolProperty(
+        name="Export Animation Only", description="Output animation without skin mesh", default=False
+    )
+
+    mode_auto_fix_duplicated_name: bpy.props.BoolProperty(
+        name="Auto Fix Duplicated Name",
+        description="Fix duplicated object name automatically (mesh <-> bone)",
+        default=True,
+    )
+
+    mode_auto_insert_rootbone: bpy.props.BoolProperty(
+        name="Auto Insert Root Bone", description="Insert root bone automatically", default=False
+    )
+
+
 class SKET_PT_export_fbx_panel(bpy.types.Panel):
     """
     FBXExport用のパネルを作成
@@ -55,7 +144,7 @@ class SKET_PT_export_fbx_panel(bpy.types.Panel):
         col.operator(SKET_OT_open_export_fbx_dialog.bl_idname, text="Export FBX")
 
 
-class SKET_OT_open_export_fbx_dialog(bpy.types.Operator, ExportHelper):
+class SKET_OT_open_export_fbx_dialog(bpy.types.Operator, ExportHelper, SKETExportPropertyMixin):
     bl_idname = "sket.open_export_fbx_dialog"
     bl_label = "SKET: Export FBX"
     bl_description = "Open Export FBX Dialog"
@@ -68,42 +157,7 @@ class SKET_OT_open_export_fbx_dialog(bpy.types.Operator, ExportHelper):
     action_index: bpy.props.IntProperty(default=0)
 
     def draw(self, context):
-        layout = self.layout
-
-        self.draw_mesh_option_section(context, layout)
-
-    def draw_mode_section(self, context, parent):
-        col = parent.column(align=True)
-        row = col.row(align=True)
-        row.label(text="Mode:")
-
-        # sket_mode_export_animation_only
-        row = col.row(align=True)
-        row.prop(context.scene, "sket_mode_export_animation_only")
-
-    def draw_mesh_option_section(self, context, parent):
-        if not context.scene.sket_mode_export_animation_only:
-            box = parent.box()
-            box.label(text="Mesh:")
-
-            # global scale
-            box.column(align=True).prop(context.scene, "sket_global_scale")
-            # smooth type
-            box.column(align=True).prop(context.scene, "sket_mesh_smooth_type")
-            # deform armature only
-            box.column(align=True).prop(context.scene, "sket_use_armature_deform_only")
-
-            # axis
-            axis = box.column(align=True)
-            axis.label(text="Bone Axes:")
-            axis.prop(context.scene, "sket_bone_axis_primary_export")
-            axis.prop(context.scene, "sket_bone_axis_secondary_export")
-
-            exp = box.column(align=True)
-            exp.label(text="Experimental:")
-            exp.prop(context.scene, "sket_mode_auto_fix_duplicated_name")
-
-            exp.prop(context.scene, "sket_mode_auto_insert_rootbone")
+        pass
 
     def execute(self, context):
         return SKET_OT_export_fbx.execute(self, context)
@@ -121,6 +175,65 @@ class SKETExportSubPanel:
         return operator.bl_idname == "SKET_OT_open_export_fbx_dialog"
 
 
+class SKET_PT_export_mesh(bpy.types.Panel, SKETExportSubPanel):
+    bl_label = "Mesh"
+
+    def draw(self, context):
+        layout = self.layout
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        layout.active = not operator.mode_export_animation_only
+
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        col = layout.column(align=True)
+        col.prop(operator, "global_scale", text="Global Scale")  # global scale
+        col.prop(operator, "mesh_smooth_type", text="Smoothing Group")  # smooth type
+        col.prop(operator, "use_armature_deform_only")  # deform armature only
+
+
+class SKET_PT_export_mesh_axis(bpy.types.Panel, SKETExportSubPanel):
+    bl_label = "Axes"
+    bl_parent_id = "SKET_PT_export_mesh"
+
+    def draw(self, context):
+        layout = self.layout
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        layout.active = not operator.mode_export_animation_only
+
+
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        col = layout.column(align=True)
+        col.prop(operator, "bone_axis_primary_export", text="Primary")
+        col.prop(operator, "bone_axis_secondary_export", text="Secondary")
+
+
+class SKET_PT_export_mesh_options(bpy.types.Panel, SKETExportSubPanel):
+    bl_label = "Options"
+    bl_parent_id = "SKET_PT_export_mesh"
+
+    def draw(self, context):
+        layout = self.layout
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        layout.active = not operator.mode_export_animation_only
+
+
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        col = layout.column(align=True)
+        col.prop(operator, "mode_auto_fix_duplicated_name")
+        col.prop(operator, "mode_auto_insert_rootbone")
+
+
 class SKET_PT_export_mode(bpy.types.Panel, SKETExportSubPanel):
     bl_label = "Mode"
 
@@ -129,7 +242,8 @@ class SKET_PT_export_mode(bpy.types.Panel, SKETExportSubPanel):
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.prop(context.scene, "sket_mode_export_animation_only")
+        col = layout.column(align=True)
+        col.prop(operator, "mode_export_animation_only")
 
 
 class SKET_PT_export_actions(bpy.types.Panel, SKETExportSubPanel):
@@ -137,16 +251,21 @@ class SKET_PT_export_actions(bpy.types.Panel, SKETExportSubPanel):
 
     def draw(self, context):
         layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
 
         sfile = context.space_data
         operator = sfile.active_operator
+        keyword = operator.action_filter
 
-        layout.prop(context.scene, "sket_mode_export_animations", text="Export Mode")
+        col = layout.column(align=True)
+        col.active = operator.mode_export_animations in (SKET_E_MODE_EXPORT_ANIM_ALL, SKET_E_MODE_EXPORT_ANIM_SELECT)
+        col.prop(operator, "mode_export_separate_each_anims", text="Separate FBX each actions")
 
-        if context.scene.sket_mode_export_animations == SKET_E_MODE_EXPORT_ANIM_SELECT:
-            layout.separator()
-            layout.prop(operator, "action_filter", text="Filter", icon="FILTER")
-            keyword = operator.action_filter
+        col = layout.column(align=True)
+        col.prop(operator, "mode_export_animations", text="Export Mode", )
+
+        if operator.mode_export_animations == SKET_E_MODE_EXPORT_ANIM_SELECT:
 
             op_row = layout.row(align=True)
             select_all_op = op_row.operator(SKET_OT_set_export_all_actions.bl_idname, text="Select All")
@@ -162,9 +281,6 @@ class SKET_PT_export_actions(bpy.types.Panel, SKETExportSubPanel):
             else:
                 # Actionが存在しない場合はラベルのみ
                 layout.row(align=True).label(text="No actions to export")
-
-        if context.scene.sket_mode_export_animations in (SKET_E_MODE_EXPORT_ANIM_ALL, SKET_E_MODE_EXPORT_ANIM_SELECT):
-            layout.prop(context.scene, "sket_mode_export_separate_each_anims", text="Separate FBX each actions")
 
 
 class SKET_UL_export_actions(bpy.types.UIList):
@@ -193,7 +309,15 @@ class SKET_UL_export_actions(bpy.types.UIList):
             layout.label(text=act.name)
 
     def draw_filter(self, context: Context | None, layout: UILayout):
-        pass
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+        
+        col = layout.column(align=True)
+        row = col.row(align=True)
+
+        row.prop(operator, "action_filter", text="", icon="FILTER")
+    
 
     def filter_items(self, context: Context | None, data: AnyType | None, property: str | Any):
         acts = getattr(data, property)
@@ -521,38 +645,16 @@ class SKET_OT_set_notexport_all_actions(bpy.types.Operator):
         return {"FINISHED"}
 
 
-class SKET_OT_set_export_action(bpy.types.Operator):
-    bl_idname = "sket.set_export_action"
-    bl_label = "Set to export"
-
-    action_name: bpy.props.StringProperty(default="")
-
-    def execute(self, context):
-        bpy.ops.sket.set_action_data_tag(action_name=self.action_name, tag=SKET_TAG_ACTION_EXCLUDE, mode="REMOVE")
-
-        return {"FINISHED"}
-
-
-class SKET_OT_set_notexport_action(bpy.types.Operator):
-    bl_idname = "sket.set_notexport_action"
-    bl_label = "Set to NOT export"
-
-    action_name: bpy.props.StringProperty(default="")
-
-    def execute(self, context):
-        bpy.ops.sket.set_action_data_tag(action_name=self.action_name, tag=SKET_TAG_ACTION_EXCLUDE, mode="ADD")
-
-        return {"FINISHED"}
-
 
 classes = (
     SKET_PT_export_fbx_panel,
     SKET_OT_open_export_fbx_dialog,
     SKET_PT_export_mode,
+    SKET_PT_export_mesh,
+    SKET_PT_export_mesh_axis,
+    SKET_PT_export_mesh_options,
     SKET_PT_export_actions,
     SKET_OT_export_fbx,
-    SKET_OT_set_export_action,
-    SKET_OT_set_notexport_action,
     SKET_OT_set_export_all_actions,
     SKET_OT_set_notexport_all_actions,
     SKET_OT_set_action_data_tag,
