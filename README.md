@@ -1,4 +1,4 @@
-# SKET: SkeletalMesh Export Tool for Unreal Engine
+# Blender-Addon: SkeletalMesh Export Tool for Unreal Engine (SKET)
 
 ## About
 
