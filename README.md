@@ -1,4 +1,4 @@
-# SKET: SkeletalMesh Export Tool for Unreal Engine
+# Blender Addon: SkeletalMesh Export Tool for Unreal Engine (SKET)
 
 ## About
 
@@ -31,7 +31,7 @@
 - [x] Armature 名の自動修正 (v1.1.0)
 - [x] Bone と Mesh の名前重複の自動修正 (v1.2.0)
 - [x] 出力時に原点に RootBone を挿入する機能 (v1.2.0)
-- [ ] スクリプトによる出力対応 (v1.3.0)
-- [ ] Blender のビルトイン Exporter のオプション項目対応の修正 (v1.3.0)
-- [ ] `Import Meshes in Bone Hierarchy` オプションへの対応機能の修正 (v1.3.0)
+- [x] スクリプトによる出力対応 (v1.3.0)
+- [ ] Blender のビルトイン Exporter のオプション項目対応の修正 (~~v1.3.0~~ 未定)
+- [ ] `Import Meshes in Bone Hierarchy` オプションへの対応機能の修正 (~~v1.3.0~~ 未定)
 - [ ] SkeletalMesh Validation
