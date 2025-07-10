@@ -47,6 +47,7 @@ def create_copy_objects(armature_name: str, no_armature_mode=False, force_dummy_
 
         # Duplicate and rename
         current_obj_in_scene = [o.name for o in bpy.data.objects]
+        print(f"duplicate target in scene: {current_obj_in_scene}")
         bpy.ops.object.duplicate(linked=False, mode="TRANSLATION")
 
         for o in bpy.data.objects:
@@ -66,6 +67,8 @@ def create_copy_objects(armature_name: str, no_armature_mode=False, force_dummy_
 
         # add to list
         list_copy_objects.append(copy_object_name)
+
+    print(f"copy target objects: {list_copy_objects}")
 
     if no_armature_mode:
         # Reparent duplicate objects
@@ -106,6 +109,7 @@ def create_copy_objects(armature_name: str, no_armature_mode=False, force_dummy_
 
 def delete_copy_objects(list_target_objects):
     arm_data = None
+    print("delete list:", list_target_objects)
     for obj_name in list_target_objects:
         if obj_name in bpy.data.objects:
             obj = bpy.data.objects[obj_name]
@@ -115,13 +119,16 @@ def delete_copy_objects(list_target_objects):
 
 
             try:
+                print(f"remove object: {obj.name}")
                 bpy.data.objects.remove(obj, do_unlink=True)
+                print(f"remove armature: {arm_data.name}")
                 bpy.data.armatures.remove(arm_data, do_unlink=True)
             except:
                 pass
 
     for mesh in bpy.data.meshes:
         if SKET_EXPORT_DUMMYMESH_NAME in mesh.name:
+            print(f"mesh remove: {mesh.name}")
             bpy.data.meshes.remove(mesh, do_unlink=True)
 
 
@@ -138,6 +145,7 @@ def rename_objects_for_export(list_target_objects : List[str], fix_duplicated_na
     # 対象となるObjectのオリジナルを一時的に別名にして退避する
     for obj_name in list_target_objects:
         origin_obj_name = obj_name.replace(SKET_EXPORT_OBJ_SUFFIX, "")
+        print(f"rename object: {obj_name} -> {origin_obj_name}")
         if bpy.data.objects.get(origin_obj_name):
             bpy.data.objects[origin_obj_name].name = origin_obj_name + SKET_EXPORT_WORK_OBJ_SUFFIX
 
@@ -146,6 +154,11 @@ def rename_objects_for_export(list_target_objects : List[str], fix_duplicated_na
 
             # HACK: Armature名はUnrealEngine側で決まっているので、Armature名は固定値とする
             if is_armature(obj):
+                if origin_obj_name != SKET_NAME_ARMATURE:
+                    print(f"save 'armature' work obj in list: {origin_obj_name}")
+                    # 元がArmatureではない場合に対象リストに入れておく
+                    renamed_obj.append(SKET_NAME_ARMATURE)
+                
                 obj.name = SKET_NAME_ARMATURE
             else:
                 obj.name = origin_obj_name

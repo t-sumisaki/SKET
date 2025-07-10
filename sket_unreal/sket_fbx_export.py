@@ -1,6 +1,7 @@
 from typing import List, Any
 import bpy
 from bpy.types import AnyType, Context, UILayout
+from bpy.props import StringProperty, BoolProperty, FloatProperty, EnumProperty, IntProperty
 from bpy_extras.io_utils import ExportHelper
 from .sket_common import (
     # constants
@@ -37,17 +38,17 @@ import pathlib
 
 class SKETExportPropertyMixin:
     # DeformBoneのみ出力
-    use_armature_deform_only: bpy.props.BoolProperty(
+    use_armature_deform_only: BoolProperty(
         name="Deform Armature Only",
         description="If True, export only deform (weight-painted) armature",
         default=False,
     )
 
     # 出力スケール
-    global_scale: bpy.props.FloatProperty(name="Global Scale", default=1.0, description="Global scale applied")
+    global_scale: FloatProperty(name="Global Scale", default=1.0, description="Global scale applied")
 
     # スムージング種別
-    mesh_smooth_type: bpy.props.EnumProperty(
+    mesh_smooth_type: EnumProperty(
         name="Smoothing",
         items=(
             ("OFF", "Normals Only", "Export only normals"),
@@ -59,7 +60,7 @@ class SKETExportPropertyMixin:
     )
 
     # PrimaryAxis
-    bone_axis_primary_export: bpy.props.EnumProperty(
+    bone_axis_primary_export: EnumProperty(
         name="Primary Bone Axis",
         items=(
             ("X", "X Axis", ""),
@@ -73,7 +74,7 @@ class SKETExportPropertyMixin:
     )
 
     # SecondaryAxis
-    bone_axis_secondary_export: bpy.props.EnumProperty(
+    bone_axis_secondary_export: EnumProperty(
         name="Secondary Bone Axis",
         items=(
             ("X", "X Axis", ""),
@@ -87,7 +88,7 @@ class SKETExportPropertyMixin:
     )
 
     # アニメーション出力種別
-    mode_export_animations: bpy.props.EnumProperty(
+    mode_export_animations: EnumProperty(
         name="Export animation mode",
         items=(
             (SKET_E_MODE_EXPORT_ANIM_ALL, "All animation export", ""),
@@ -102,24 +103,24 @@ class SKETExportPropertyMixin:
     )
 
     # アニメーション毎にファイルを分けて出力するか
-    separate_file_each_anims: bpy.props.BoolProperty(
+    separate_file_each_anims: BoolProperty(
         name="Separate File For Each Animation",
         description="Output a separate file for each animation",
         default=False,
     )
 
     # Meshを出力せず、Animationのみで出力するか
-    export_animation_only: bpy.props.BoolProperty(
+    export_animation_only: BoolProperty(
         name="Export Animation Only", description="Output animation without skin mesh", default=False
     )
 
-    auto_fix_duplicate_name: bpy.props.BoolProperty(
+    auto_fix_duplicate_name: BoolProperty(
         name="Auto Fix Duplicated Name",
         description="Fix duplicated object name automatically (mesh <-> bone)",
         default=True,
     )
 
-    insert_rootbone: bpy.props.BoolProperty(
+    insert_rootbone: BoolProperty(
         name="Auto Insert Root Bone", description="Insert root bone automatically", default=False
     )
 
@@ -323,18 +324,21 @@ class SKET_UL_export_actions(bpy.types.UIList):
 
 
 class SKET_OT_export_fbx(bpy.types.Operator, ExportHelper, SKETExportPropertyMixin):
+    """Export SkeletalMesh in Fbx file format"""
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
     bl_idname = "sket.export_fbx"
-    bl_label = "SKET: Export FBX"
+    bl_label = "Export FBX"
 
     filename_ext = ".fbx"
-    filter_glob: bpy.props.StringProperty(default="*.fbx", options={"HIDDEN"})
+    filter_glob: StringProperty(default="*.fbx", options={"HIDDEN"})
 
-    action_filter: bpy.props.StringProperty(name="Filter", default="", options={"TEXTEDIT_UPDATE"})
+    action_filter: StringProperty(name="Filter", default="", options={"TEXTEDIT_UPDATE"})
 
-    action_index: bpy.props.IntProperty(default=0)
+    action_index: IntProperty(default=0)
 
-    def draw(self, context):
-        pass
+    # def draw(self, context):
+    #     pass
 
     # def invoke(self, context, event):
     #     context.window_manager.fileselect_add(self)
