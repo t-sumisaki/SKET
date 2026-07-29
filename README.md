@@ -7,7 +7,7 @@
 
 ## Support Versions
 
-- Blender 3.2 以降
+- Blender 5.0 以降
 
 ## インストール方法
 
