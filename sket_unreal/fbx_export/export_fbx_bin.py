@@ -204,6 +204,7 @@ def fbx_template_def_light(scene, settings, override_defaults=None, nbr_users=0)
         b"CastLight": (True, "p_bool", False),
         b"Color": ((1.0, 1.0, 1.0), "p_color", True),
         b"Intensity": (100.0, "p_number", True),  # Times 100 compared to Blender values...
+        b"Exposure" : (0.0, "p_number", True ),
         b"DecayType": (2, "p_enum", False),  # Quadratic.
         b"DecayStart": (30.0 * gscale, "p_double", False),
         b"CastShadows": (True, "p_bool", False),
@@ -601,12 +602,20 @@ def fbx_data_light_elements(root, lamp, scene_data):
 
     elem_data_single_int32(light, b"GeometryVersion", FBX_GEOMETRY_VERSION)  # Sic...
 
+    intensity = lamp.energy * 100.0 * pow(2.0, lamp.exposure)
+    color = lamp.color.copy()
+    if lamp.use_temperature:
+        temperature_color = lamp.temperature_color
+        color[0] *= temperature_color[0]
+        color[1] *= temperature_color[1]
+        color[2] *= temperature_color[2]
+
     tmpl = elem_props_template_init(scene_data.templates, b"Light")
     props = elem_properties(light)
     elem_props_template_set(tmpl, props, "p_enum", b"LightType", FBX_LIGHT_TYPES[lamp.type])
     elem_props_template_set(tmpl, props, "p_bool", b"CastLight", do_light)
-    elem_props_template_set(tmpl, props, "p_color", b"Color", lamp.color)
-    elem_props_template_set(tmpl, props, "p_number", b"Intensity", lamp.energy * 100.0)
+    elem_props_template_set(tmpl, props, "p_color", b"Color", color)
+    elem_props_template_set(tmpl, props, "p_number", b"Intensity", intensity)
     elem_props_template_set(tmpl, props, "p_enum", b"DecayType", FBX_LIGHT_DECAY_TYPES['INVERSE_SQUARE'])
     elem_props_template_set(tmpl, props, "p_double", b"DecayStart", 25.0 * gscale)  # 25 is old Blender default
     elem_props_template_set(tmpl, props, "p_bool", b"CastShadows", do_shadow)
@@ -1032,7 +1041,7 @@ def fbx_data_mesh_elements(root, me_obj, scene_data, done_meshes):
     # And now, layers!
 
     # Smoothing.
-    if smooth_type in {'FACE', 'EDGE'}:
+    if smooth_type in {'FACE', 'EDGE', 'SMOOTH_GROUP'}:
         ps_fbx_dtype = np.int32
         _map = b""
         if smooth_type == 'FACE':
@@ -1046,6 +1055,10 @@ def fbx_data_mesh_elements(root, me_obj, scene_data, done_meshes):
             else:
                 # The mesh has no "sharp_face" attribute, so every face is smooth.
                 t_ps = np.ones(len(me.polygons), dtype=ps_fbx_dtype)
+            _map = b"ByPolygon"
+        elif smooth_type == 'SMOOTH_GROUP':
+            smoothing_groups = me.calc_smooth_groups(use_bitflags=True, use_boundary_vertices_for_bitflags=True)[0]
+            t_ps = np.asarray(smoothing_groups, dtype=ps_fbx_dtype)
             _map = b"ByPolygon"
         else:  # EDGE
             _map = b"ByEdge"
@@ -1172,8 +1185,7 @@ def fbx_data_mesh_elements(root, me_obj, scene_data, done_meshes):
             #     normal_source = me.polygon_normals
             #     normal_mapping = b"ByPolygon"
             case 'CORNER' | 'FACE':
-                # We have a mix of sharp/smooth edges/faces or custom split normals, so need to get normals from
-                # corners.
+                # We have a mix of sharp/smooth edges/faces or custom normals, so need to get normals from corners.
                 normal_source = me.corner_normals
                 normal_mapping = b"ByPolygonVertex"
             case _:
@@ -1235,13 +1247,15 @@ def fbx_data_mesh_elements(root, me_obj, scene_data, done_meshes):
                     num_loops = len(me.loops)
                     t_ln = np.empty(num_loops * 3, dtype=normal_bl_dtype)
                     # t_lnw = np.zeros(len(me.loops), dtype=np.float64)
-                    uv_names = [uvlayer.name for uvlayer in me.uv_layers]
-                    # Annoying, `me.calc_tangent` errors in case there is no geometry...
-                    if num_loops > 0:
-                        for name in uv_names:
+                    # WARNING: Since tangent layers are recomputed inside the loop, do not directly iterate over the
+                    # uvlayers. Instead, cache their keys (names), and use this cached data inside the loop to compute
+                    # the tangent layers.
+                    uvlayer_names = [uvl.name for uvl in me.uv_layers]
+                    for idx, name in enumerate(uvlayer_names):
+                        # Annoying, `me.calc_tangent` errors in case there is no geometry...
+                        if num_loops > 0:
                             me.calc_tangents(uvmap=name)
-                    for idx, uvlayer in enumerate(me.uv_layers):
-                        name = uvlayer.name
+
                         # Loop bitangents (aka binormals).
                         # NOTE: this is not supported by importer currently.
                         me.loops.foreach_get("bitangent", t_ln)
@@ -1503,7 +1517,7 @@ def fbx_data_mesh_elements(root, me_obj, scene_data, done_meshes):
         lay_tan = elem_empty(layer, b"LayerElement")
         elem_data_single_string(lay_tan, b"Type", b"LayerElementTangent")
         elem_data_single_int32(lay_tan, b"TypedIndex", 0)
-    if smooth_type in {'FACE', 'EDGE'}:
+    if smooth_type in {'FACE', 'EDGE', 'SMOOTH_GROUP'}:
         lay_smooth = elem_empty(layer, b"LayerElement")
         elem_data_single_string(lay_smooth, b"Type", b"LayerElementSmoothing")
         elem_data_single_int32(lay_smooth, b"TypedIndex", 0)
@@ -1628,10 +1642,21 @@ def fbx_data_material_elements(root, ma, scene_data):
     if scene_data.settings.use_custom_props:
         fbx_data_element_custom_properties(props, ma)
 
+def _get_image_filepath(img):
+    if len(img.filepath) > 0:
+        return img.filepath
+
+    # It's possible to have a packed image without a filepath. Pick a filepath
+    # that is unlikely to conflict.
+    filepath = os.path.join("textures", "packed")
+    if img.library:
+        filepath = os.path.join(filepath, bpy.path.clean_name(img.library.name))
+    return "//" + os.path.join(filepath, bpy.path.clean_name(img.name))
 
 def _gen_vid_path(img, scene_data):
     msetts = scene_data.settings.media_settings
-    fname_rel = bpy_extras.io_utils.path_reference(img.filepath, msetts.base_src, msetts.base_dst, msetts.path_mode,
+    img_filepath = _get_image_filepath(img)
+    fname_rel = bpy_extras.io_utils.path_reference(img_filepath, msetts.base_src, msetts.base_dst, msetts.path_mode,
                                                    msetts.subdir, msetts.copy_set, img.library)
     fname_abs = os.path.normpath(os.path.abspath(os.path.join(msetts.base_dst, fname_rel)))
     return fname_abs, fname_rel
@@ -2477,16 +2502,25 @@ def fbx_animations(scene_data):
 
     # All actions.
     if scene_data.settings.bake_anim_use_all_actions:
-        def validate_actions(act, path_resolve):
-            for fc in act.fcurves:
-                data_path = fc.data_path
-                if fc.array_index:
-                    data_path = data_path + "[%d]" % fc.array_index
-                try:
-                    path_resolve(data_path)
-                except ValueError:
-                    return False  # Invalid.
-            return True  # Valid.
+        def find_validate_action_slot(act, path_resolve) -> bpy.types.ActionSlot | None:
+            for layer in act.layers:
+                for strip in layer.strips:
+                    for channelbag in strip.channelbags:
+                        if not channelbag.fcurves:
+                            # Do not export empty Channelbags.
+                            continue
+                        for fc in channelbag.fcurves:
+                            data_path = fc.data_path
+                            if fc.array_index:
+                                data_path = data_path + "[%d]" % fc.array_index
+                            try:
+                                path_resolve(data_path)
+                            except ValueError:
+                                break  # Invalid, go to next strip.
+                        else:
+                            # Did not 'break', so all F-Curves are valid.
+                            return channelbag.slot
+            return None  # Found nothing to return.
 
         def restore_object(ob_to, ob_from):
             # Restore org state of object (ugh :/ ).
@@ -2526,14 +2560,34 @@ def fbx_animations(scene_data):
             pbones_matrices = [pbo.matrix_basis.copy() for pbo in ob.pose.bones] if ob.type == 'ARMATURE' else ...
 
             org_act = ob.animation_data.action
+            org_act_slot = ob.animation_data.action_slot
             path_resolve = ob.path_resolve
 
             for act in bpy.data.actions:
+
+                # HACK: === Export Action filter
+                from ..sket_common import (
+                    SKET_TAG_EXPORT
+                )
+
+                if SKET_TAG_EXPORT not in act.keys():
+                    continue
+
+                if act[SKET_TAG_EXPORT] == False:
+                    continue
+
+                # HACK: === END Export Action Filter
+
                 # For now, *all* paths in the action must be valid for the object, to validate the action.
                 # Unless that action was already assigned to the object!
-                if act != org_act and not validate_actions(act, path_resolve):
+                if act == org_act:
+                    act_slot = org_act_slot
+                else:
+                    act_slot = find_validate_action_slot(act, path_resolve)
+                if not act_slot:
                     continue
                 ob.animation_data.action = act
+                ob.animation_data.action_slot = act_slot
                 frame_start, frame_end = act.frame_range  # sic!
                 add_anim(animations, animated,
                          fbx_animations_do(scene_data, (ob, act), frame_start, frame_end, True,
@@ -2543,6 +2597,8 @@ def fbx_animations(scene_data):
                     for pbo, mat in zip(ob.pose.bones, pbones_matrices):
                         pbo.matrix_basis = mat.copy()
                 ob.animation_data.action = org_act
+                if org_act:
+                    ob.animation_data.action_slot = org_act_slot
                 restore_object(ob, ob_copy)
                 scene.frame_set(scene.frame_current, subframe=0.0)
 
@@ -2550,6 +2606,8 @@ def fbx_animations(scene_data):
                 for pbo, mat in zip(ob.pose.bones, pbones_matrices):
                     pbo.matrix_basis = mat.copy()
             ob.animation_data.action = org_act
+            if org_act:
+                ob.animation_data.action_slot = org_act_slot
 
             bpy.data.objects.remove(ob_copy)
             scene.frame_set(scene.frame_current, subframe=0.0)
@@ -3038,9 +3096,22 @@ def fbx_data_from_scene(scene, depsgraph, settings):
 
     # Materials
     mesh_material_indices = {}
-    _objs_indices = {}
-    for ma, (ma_key, ob_objs) in data_materials.items():
-        for ob_obj in ob_objs:
+    for ob_obj in objects:
+        ob_mat_idx = 0
+        me = None
+        if ob_obj.type in BLENDER_OBJECT_TYPES_MESHLIKE:
+            _mesh_key, me, _free = data_meshes[ob_obj]
+        # NOTE: If a mesh has multiple material slots with the same material, they are combined into one
+        # single connexion (slot).
+        # Even if duplicate materials were exported without combining them into one slot, keeping duplicate
+        # materials separated does not appear to be common behavior of external software when importing FBX.
+        # Also, None (empty slots, no material) are always skipped/ignored.
+        done_materials_for_object = {None}
+        for ma in ob_obj.materials:
+            if ma in done_materials_for_object:
+                continue
+            done_materials_for_object.add(ma)
+            ma_key, _ob_objs = data_materials[ma]
             connections.append((b"OO", get_fbx_uuid_from_key(ma_key), ob_obj.fbx_uuid, None))
             # Get index of this material for this object (or dupliobject).
             # Material indices for mesh faces are determined by their order in 'ma to ob' connections.
@@ -3049,13 +3120,13 @@ def fbx_data_from_scene(scene, depsgraph, settings):
             # Should not be an issue in practice, and it's needed in case we export duplis but not the original!
             if ob_obj.type not in BLENDER_OBJECT_TYPES_MESHLIKE:
                 continue
-            _mesh_key, me, _free = data_meshes[ob_obj]
-            idx = _objs_indices[ob_obj] = _objs_indices.get(ob_obj, -1) + 1
-            # XXX If a mesh has multiple material slots with the same material, they are combined into one slot.
-            # Even if duplicate materials were exported without combining them into one slot, keeping duplicate
-            # materials separated does not appear to be common behavior of external software when importing FBX.
-            mesh_material_indices.setdefault(me, {})[ma] = idx
-    del _objs_indices
+            if ma not in mesh_material_indices.setdefault(me, {}):
+                mesh_material_indices[me][ma] = ob_mat_idx
+            else:
+                print("WARNING: Cannot register a valid material index for '{}' from '{}' mesh, '{}' object. "
+                      "Most likely, different objects using the same mesh, but different material slots layouts."
+                      "".format(ma.name, me.name, ob_obj.name))
+            ob_mat_idx += 1
 
     # Textures
     for (ma, sock_name), (tex_key, fbx_prop) in data_textures.items():
@@ -3128,11 +3199,10 @@ def fbx_header_elements(root, scene_data, time=None):
     app_name = "Blender (stable FBX IO)"
     app_ver = bpy.app.version_string
 
-    import addon_utils
-    import sys
-
-    addon_ver = addon_utils.module_bl_info(sys.modules['sket_unreal'])['version']
-    origin_addon_var = (5, 12, 7) # from OFFICIAL FBX Exporter blender4.4
+    # HACK: read version from the SKET addon's bl_info (parent package), not io_scene_fbx's
+    from .. import bl_info
+    addon_ver = bl_info["version"]
+    del bl_info
 
     # ##### Start of FBXHeaderExtension element.
     header_ext = elem_empty(root, b"FBXHeaderExtension")

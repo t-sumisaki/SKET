@@ -1,8 +1,8 @@
 bl_info = {
     "name": "SKET: SkeletalMesh Export Tool for Unreal Engine",
     "author": "T_Sumisaki",
-    "version": (1, 4, 0),
-    "blender": (4, 4, 0),
+    "version": (1, 5, 0),
+    "blender": (5, 0, 0),
     "location": "File > Import-Export",
     "description": "FBX Exporter for Unreal Engine",
     "category": "Import-Export",
@@ -48,4 +48,4 @@ def register():
 def unregister():
     export_fbx_init.unregister()
     sket_fbx_export.unregister()
-    sket_delete_action.unregsiter()
+    sket_delete_action.unregister()

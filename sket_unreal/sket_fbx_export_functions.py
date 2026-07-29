@@ -297,26 +297,43 @@ def apply_scale_x100_no_armature(target_meshes):
         bpy.context.evaluated_depsgraph_get().update()
 
 
-def apply_action_scale_x100(list_target_actions):
+def iter_action_fcurves(action):
+    """ActionのFCurveを列挙する。
+
+    Blender 4.4以降のスロット付きAction (layers/strips/channelbags) と、
+    旧来の ``action.fcurves`` の双方に対応する。
+    """
+    # 旧API (Blender 4.3 以前)
+    if hasattr(action, "fcurves"):
+        yield from action.fcurves
+        return
+
+    # スロット付きAction (Blender 4.4+)
+    for layer in action.layers:
+        for strip in layer.strips:
+            if strip.type != "KEYFRAME":
+                continue
+            for channelbag in strip.channelbags:
+                yield from channelbag.fcurves
+
+
+def _scale_action_location_curves(list_target_actions, factor):
     for action_name in list_target_actions:
         action = bpy.data.actions[action_name]
-        for fcurve in action.fcurves:
+        for fcurve in iter_action_fcurves(action):
             if "location" in fcurve.data_path:
                 for point in fcurve.keyframe_points:
-                    point.co[1] *= 100
-                    point.handle_left[1] *= 100
-                    point.handle_right[1] *= 100
+                    point.co[1] *= factor
+                    point.handle_left[1] *= factor
+                    point.handle_right[1] *= factor
+
+
+def apply_action_scale_x100(list_target_actions):
+    _scale_action_location_curves(list_target_actions, 100)
 
 
 def revert_action_scale_x100(list_target_actions):
-    for action_name in list_target_actions:
-        action = bpy.data.actions[action_name]
-        for fcurve in action.fcurves:
-            if "location" in fcurve.data_path:
-                for point in fcurve.keyframe_points:
-                    point.co[1] *= 0.01
-                    point.handle_left[1] *= 0.01
-                    point.handle_right[1] *= 0.01
+    _scale_action_location_curves(list_target_actions, 0.01)
 
 
 def revert_scale_x100(armature_name):

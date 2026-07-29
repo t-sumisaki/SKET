@@ -82,7 +82,7 @@ def register():
     bpy.types.Scene.sket_delete_action_index = bpy.props.IntProperty(default=-1)
 
 
-def unregsiter():
+def unregister():
     for cls in classes:
         bpy.utils.unregister_class(cls)
 

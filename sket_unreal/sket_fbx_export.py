@@ -419,8 +419,10 @@ class SKET_OT_export_fbx(bpy.types.Operator, ExportHelper, SKETExportPropertyMix
 
                 target_armature_name = selected_parent[0].name
 
-            # Set main target armature name
-            target_armature_name = bpy.context.active_object.name
+            # Set main target armature name (armature mode only; no_armature mode already
+            # resolved target_armature_name from the selected root object above)
+            if not no_armature_mode:
+                target_armature_name = bpy.context.active_object.name
 
             # Disable auto-keyframe
             context.scene.tool_settings.use_keyframe_insert_auto = False
